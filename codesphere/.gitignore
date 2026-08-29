@@ -1,0 +1,19 @@
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.env
+backend/*.egg-info/
+
+# Editors / OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
