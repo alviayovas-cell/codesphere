@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import * as api from '../../services/api'
 import { ApiError } from '../../services/api'
-import type { ProblemPublic, RunCodeResult, SubmitCodeResult, Verdict } from '../../types'
+import type { JobStatus, ProblemPublic, RunCodeResult, SubmitCodeResult, Verdict } from '../../types'
 
 const DEFAULT_TEMPLATE = '#include <stdio.h>\n\nint main() {\n    \n    return 0;\n}\n'
 
@@ -41,6 +41,7 @@ export default function ProblemDetail() {
 
   const [running, setRunning] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [jobPhase, setJobPhase] = useState<JobStatus | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [runResult, setRunResult] = useState<RunCodeResult | null>(null)
   const [submitResult, setSubmitResult] = useState<SubmitCodeResult | null>(null)
@@ -75,14 +76,22 @@ export default function ProblemDetail() {
     if (!problemId) return
     setActionError(null)
     setSubmitResult(null)
+    setRunResult(null)
     setRunning(true)
+    setJobPhase('queued')
     try {
-      const result = await api.runCode(problemId, code, stdin)
-      setRunResult(result)
+      const { jobId } = await api.runCode(problemId, code, stdin)
+      const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status) })
+      if (finalStatus.status === 'failed') {
+        setActionError(finalStatus.error ?? 'The run job failed.')
+      } else {
+        setRunResult(finalStatus.result as RunCodeResult)
+      }
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Could not run code.')
     } finally {
       setRunning(false)
+      setJobPhase(null)
     }
   }
 
@@ -90,15 +99,30 @@ export default function ProblemDetail() {
     if (!problemId) return
     setActionError(null)
     setRunResult(null)
+    setSubmitResult(null)
     setSubmitting(true)
+    setJobPhase('queued')
     try {
-      const result = await api.submitCode(problemId, code)
-      setSubmitResult(result)
+      const { jobId } = await api.submitCode(problemId, code)
+      const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status) })
+      if (finalStatus.status === 'failed') {
+        setActionError(finalStatus.error ?? 'The submit job failed.')
+      } else {
+        setSubmitResult(finalStatus.result as SubmitCodeResult)
+      }
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Could not submit code.')
     } finally {
       setSubmitting(false)
+      setJobPhase(null)
     }
+  }
+
+  const jobPhaseLabel: Record<JobStatus, string> = {
+    queued: 'Queued...',
+    processing: 'Executing...',
+    completed: 'Done',
+    failed: 'Failed',
   }
 
   if (loadError) {
@@ -187,7 +211,7 @@ export default function ProblemDetail() {
                 disabled={running || submitting}
                 className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200"
               >
-                {running ? 'Running...' : 'Run Code'}
+                {running ? (jobPhase ? jobPhaseLabel[jobPhase] : 'Running...') : 'Run Code'}
               </button>
               <button
                 type="button"
@@ -195,7 +219,7 @@ export default function ProblemDetail() {
                 disabled={running || submitting}
                 className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-gray-900"
               >
-                {submitting ? 'Submitting...' : 'Submit Code'}
+                {submitting ? (jobPhase ? jobPhaseLabel[jobPhase] : 'Submitting...') : 'Submit Code'}
               </button>
             </div>
           </div>

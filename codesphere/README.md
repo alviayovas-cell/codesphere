@@ -21,6 +21,7 @@ codesphere/
 **Phase 4: Learning Dashboard** — complete.
 **Phase 5: Coding Problem Bank** — complete.
 **Phase 6: Monaco Editor and Judge0** — complete.
+**Phase 7: Redis and RQ Queue** — complete.
 
 Implemented so far:
 - Frontend scaffold (React + TypeScript + Vite + Tailwind CSS + React Router) with placeholder pages.
@@ -44,12 +45,16 @@ Implemented so far:
 - `backend/scripts/seed_problems.py` — idempotently creates the 10 named Data Structures problems (DS01-DS10) from spec section 8, each with 2 public and 5 hidden test cases, real problem statements, and verified-correct expected outputs (see Known Limitations below for how these were verified).
 - Frontend: `/student/problems` (sortable table of problems). Admin gets `/admin/problems` (list/create/delete) and `/admin/problems/:id` (add/remove test cases, tagged public/hidden).
 - Judge0 integration (`app/services/judge_service.py`): the backend never executes student code itself — every run goes to a configured Judge0 instance over HTTP (base64-encoded payloads, `wait=true`), with retries on transient network failures. Defaults to the free public **Judge0 CE demo instance** (`ce.judge0.com`) so the app works out of the box, but that instance is rate-limited and explicitly **not** meant for a real coding event — point `JUDGE0_API_URL` (and `JUDGE0_API_KEY`/`JUDGE0_API_HOST` if using RapidAPI) at your own instance before one.
-- `POST /api/code/run` — executes code against student-editable stdin, returns raw stdout/stderr/compile output/verdict/time/memory. No test-case grading, nothing persisted.
-- `POST /api/code/submit` — executes code against **every** test case (public + hidden) for the problem, in parallel (with a compile-error short-circuit so a broken build doesn't get recompiled N times), scores it (full marks if every case passes, else 0), and persists a `Submission` record (`submissionType: "submit"`, `roundId: null` for this practice-mode flow). Returns overall verdict/score/passed-total plus a per-test-case pass/fail list — matching spec section 19's Practice Mode result visibility — without ever exposing hidden test case content.
-- Rate limiting per spec section 11: 5 Run Code and 3 Submit Code requests per minute per student, enforced by an in-memory sliding-window limiter (`app/core/rate_limit.py`) returning `429` with a `Retry-After` header.
-- Frontend: `/student/problems/:id` is now the full coding interface — problem statement on the left, a Monaco editor (C syntax, default template) with an editable Input box and Run/Submit buttons on the right, and an output panel showing verdict, stdout/stderr/compile errors, time/memory, or (for Submit) score and a per-test-case pass/fail list. Code drafts persist per-problem in `localStorage` across navigations.
+- Rate limiting per spec section 11: 5 Run Code and 3 Submit Code requests per minute per student, enforced by an in-memory sliding-window limiter (`app/core/rate_limit.py`) returning `429` with a `Retry-After` header, checked at enqueue time.
+- Frontend: `/student/problems/:id` is the full coding interface — problem statement on the left, a Monaco editor (C syntax, default template) with an editable Input box and Run/Submit buttons on the right, and an output panel showing verdict, stdout/stderr/compile errors, time/memory, or (for Submit) score and a per-test-case pass/fail list. Code drafts persist per-problem in `localStorage` across navigations.
+- **Redis + RQ job queue** (spec section 12): `POST /api/code/run` and `POST /api/code/submit` no longer execute inline — they enqueue a job and return `{jobId, status: "queued"}` immediately; the frontend polls `GET /api/code/jobs/{jobId}` (via `pollJob` in `services/api.ts`) until it's `completed` or `failed`. The actual Judge0 call and MongoDB write happen in a separate worker process (`app/workers/jobs.py`), never on the FastAPI request-handling process, so a burst of Run/Submit requests can't block the web server or each other.
+- **Priority queues**: three RQ queues — `final_submit` > `auto_submit` > `run_code` — with a worker started via `python -m app.workers.run_worker` listening to them in that order (spec: "Final assessment submissions must have higher priority than normal Run Code requests"). Today's practice-mode Submit Code already uses the `final_submit` queue, since it's the same priority tier a round's real final submission will use once coding rounds exist (Phase 8) — no rework needed there. `auto_submit` is reserved for Phase 10.
+- **Windows compatibility fix**: RQ's default `Worker` class forks a child process per job (`os.fork()`), which doesn't exist on Windows and would crash immediately. `run_worker.py` detects the platform and uses RQ's `SimpleWorker` (no forking) on Windows.
+- Job tracking: RQ's own job states are mapped to the simplified state model from spec section 12 (`queued`/`processing`/`completed`/`failed`), each job is scoped to the student who created it (`meta.student_id`, checked on every status read — a `403` if you try to read someone else's job), and job/network failures get one automatic RQ-level retry on top of `JudgeService`'s own Judge0-level retry.
+- `GET /api/health/queue` — reports Redis connectivity, per-queue job counts, and active worker count (spec: "Queue health monitoring").
+- The synchronous Judge0 client from Phase 6 gained a twin, `SyncJudgeService` (same payload/response handling, just `httpx.Client` instead of `AsyncClient`) for use inside the synchronous RQ worker process; `SubmissionService` from Phase 6 was removed as dead code now that `app/workers/jobs.py` is the single source of truth for Run/Submit logic.
 
-Everything else described in the project specification (Redis/queue, coding rounds, etc.) is **not yet implemented** and will be added in later phases.
+Everything else described in the project specification (coding rounds, etc.) is **not yet implemented** and will be added in later phases.
 
 ## Prerequisites
 
@@ -75,6 +80,16 @@ Backend will be available at `http://localhost:8000`, with a health check at `ht
 By default `MONGODB_URI` in `.env` points at `mongodb://localhost:27017`. If you don't have MongoDB running locally, edit `backend/.env` and set `MONGODB_URI` to a MongoDB Atlas connection string instead. The API still starts even if the database is unreachable — `/api/health/db` will just report `"unavailable"` until it can connect.
 
 By default `JUDGE0_API_URL` in `.env` points at the free public Judge0 CE demo instance (`https://ce.judge0.com`), so Run/Submit work immediately with no setup. That instance is shared, rate-limited, and not meant for a real coding event — before one, set `JUDGE0_API_URL` to your own self-hosted or RapidAPI-hosted Judge0 instance (and `JUDGE0_API_KEY`/`JUDGE0_API_HOST` if using RapidAPI).
+
+**As of Phase 7, you also need Redis and at least one worker process for Run/Submit to actually complete** (the API will accept and queue the request either way, but it'll sit at `"queued"` forever without a worker). Install Redis (e.g. via [Memurai](https://www.memurai.com/) or WSL on Windows, `brew install redis` on macOS, or your package manager on Linux), make sure it's running on `localhost:6379` (or update `REDIS_URL` in `.env`), then in a second terminal:
+
+```
+cd backend
+venv\Scripts\activate
+python -m app.workers.run_worker
+```
+
+Run more than one worker process (in more terminals) to process jobs concurrently. Check `http://localhost:8000/api/health/queue` to see Redis connectivity, per-queue job counts, and how many workers are listening.
 
 ### Frontend
 
@@ -227,3 +242,25 @@ This creates the 10 named DS01-DS10 problems from the spec, each with 2 public a
 - All-or-nothing scoring: a submission gets full marks only if every test case (public and hidden) passes, otherwise 0 — the spec doesn't define partial credit, so this was the simplest defensible interpretation. Straightforward to change later if partial credit is wanted.
 - No results/history page yet (`GET /api/results` is Phase 11) — a Submit's outcome is only shown inline on the page where you submitted it, though every submission is persisted to MongoDB already.
 - The Monaco editor always uses the `vs-dark` theme regardless of the site's light/dark mode — a minor cosmetic inconsistency, not a functional issue.
+
+## Testing Phase 7
+
+1. Start Redis, start the backend, start at least one worker (`python -m app.workers.run_worker`), and the frontend.
+2. Visit `http://localhost:8000/api/health/queue` — expect `{"status": "ok", "redis": "connected", "queues": {"final_submit": 0, "auto_submit": 0, "run_code": 0}, "workers": 1}` (worker count matches however many `run_worker.py` processes you started).
+3. Log in as a student, open a problem, click **Run Code** — the button should briefly show "Queued..." then "Executing..." before landing on the result, same as Phase 6's behavior from the outside, but now backed by the queue. Watch the worker's terminal — you should see it log the job being picked up and completed.
+4. Stop the worker process, click Run Code again — the button should sit on "Queued..." indefinitely (nothing is processing it). Restart the worker — the request should complete shortly after, without you needing to click anything again (still polling from before).
+5. In `/docs`, check `GET /api/code/jobs/{jobId}` with someone else's job id (or just an unauthenticated/different-student token) — should return `403`.
+6. Rate limiting still applies exactly as in Phase 6 (checked at enqueue time, before the job ever reaches Redis).
+
+## Known Limitations (Phase 7)
+
+- **No real Redis or MongoDB server was available in this environment.** Verification used a genuinely separate-process setup wherever it mattered:
+  - **Real RQ + a real (TCP-listening) fake Redis server** (`fakeredis.TcpFakeServer`, not an in-process mock — a real socket other processes can connect to) **+ real Judge0** (`ce.judge0.com`, live network) **+ a shared in-memory Mongo substitute**: basic Run and Submit jobs end-to-end (13/13 checks, including confirming a `Submission` document actually lands in the shared store), and — most importantly — the **priority ordering itself**: 3 Run Code jobs enqueued, then 1 Submit Code job, all before a `SimpleWorker` listening to all three queues (exactly as `run_worker.py` does) started; the Submit job, despite being enqueued last, was processed **first**, ahead of two of the three earlier Run jobs. That's the core spec-11 requirement working correctly, not assumed.
+  - **The actual FastAPI route layer** (enqueue → `jobId` → poll → result, ownership checks, 404s, rate limiting) was separately verified via `TestClient` against a real Judge0-backed worker run — 10/10 checks.
+  - **The literal shipped command**, `python -m app.workers.run_worker`, was run as a real subprocess (not imported/monkeypatched) against the fake Redis server and confirmed it connects and logs `*** Listening on final_submit, auto_submit, run_code...` — i.e., the exact instructions in this README actually work.
+  - **Not** verified against real Redis or real MongoDB Atlas, or through an actual browser session — please run through the steps above with your own infrastructure.
+- **Found and fixed a real Windows compatibility bug during verification**: RQ's default `Worker` class calls `os.fork()` per job, which doesn't exist on Windows and crashes immediately (`AttributeError: module 'os' has no attribute 'fork'`) — confirmed by hitting it directly. `run_worker.py` now uses RQ's `SimpleWorker` (no forking) on Windows via a `sys.platform` check.
+- The fake Redis server's pub/sub emulation isn't fully wire-compatible with real Redis — burst-mode workers connected to it over TCP took several minutes to shut down cleanly (retrying a pub/sub operation with backoff) even though the jobs themselves completed in seconds. This is specific to the *test* server, not application code; a real Redis instance doesn't have this issue, and it doesn't affect the continuous (non-burst) mode `run_worker.py` actually runs in.
+- Job results are kept in Redis for `JOB_RESULT_TTL_SECONDS` (default 1 hour) via RQ's `result_ttl` — after that, `GET /api/code/jobs/{id}` will 404 even for a job that really did complete. Submissions are still safely in MongoDB either way; only the ephemeral job-result cache expires.
+- Rate limiting is still the in-memory, per-process limiter from Phase 6 (unchanged) — it governs the *enqueue* step, not queue processing itself, so it still doesn't coordinate across multiple FastAPI processes. Redis now exists in the stack and would be a natural backing store for a distributed version, but that wasn't required by this phase's spec and wasn't built.
+- No job cancellation endpoint — once enqueued, a job runs to completion (or its timeout) even if the student navigates away; the frontend just stops polling.

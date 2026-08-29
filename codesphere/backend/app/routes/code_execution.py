@@ -1,57 +1,123 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from redis import Redis
+from rq import Retry
+from rq.job import Job
 
+from app.core.config import settings
 from app.core.dependencies import (
     enforce_run_rate_limit,
     enforce_submit_rate_limit,
     get_current_user,
-    get_judge_service,
     get_problem_repository,
-    get_submission_repository,
-    get_test_case_repository,
 )
-from app.database.repositories.problem_repository import ProblemRepository, TestCaseRepository
-from app.database.repositories.submission_repository import SubmissionRepository
+from app.database.repositories.problem_repository import ProblemRepository
 from app.models.user import User
 from app.schemas.code_execution import (
+    JobEnqueuedResponse,
+    JobStatusResponse,
     RunCodeRequest,
-    RunCodeResult,
     SubmitCodeRequest,
-    SubmitCodeResult,
 )
-from app.services.judge_service import JudgeService
-from app.services.submission_service import ProblemNotFoundError, SubmissionService
+from app.workers.jobs import run_code_job, submit_code_job
+from app.workers.queue_config import (
+    QUEUE_FINAL_SUBMIT,
+    QUEUE_RUN_CODE,
+    get_queue,
+    get_redis_connection,
+)
 
 router = APIRouter(prefix="/code", tags=["code"])
 
 
-def _service(
-    problem_repository: ProblemRepository = Depends(get_problem_repository),
-    test_case_repository: TestCaseRepository = Depends(get_test_case_repository),
-    submission_repository: SubmissionRepository = Depends(get_submission_repository),
-    judge_service: JudgeService = Depends(get_judge_service),
-) -> SubmissionService:
-    return SubmissionService(problem_repository, test_case_repository, submission_repository, judge_service)
+def _redis() -> Redis:
+    return get_redis_connection()
 
 
-@router.post("/run", response_model=RunCodeResult, dependencies=[Depends(enforce_run_rate_limit)])
+@router.post("/run", response_model=JobEnqueuedResponse, dependencies=[Depends(enforce_run_rate_limit)])
 async def run_code(
     payload: RunCodeRequest,
     current_user: User = Depends(get_current_user),
-    service: SubmissionService = Depends(_service),
-) -> RunCodeResult:
-    try:
-        return await service.run_code(current_user.id, payload.problem_id, payload.code, payload.stdin)
-    except ProblemNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    problem_repository: ProblemRepository = Depends(get_problem_repository),
+    connection: Redis = Depends(_redis),
+) -> JobEnqueuedResponse:
+    if await problem_repository.find_by_id(payload.problem_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem not found")
+
+    queue = get_queue(QUEUE_RUN_CODE, connection)
+    job = queue.enqueue(
+        run_code_job,
+        args=(current_user.id, payload.problem_id, payload.code, payload.stdin),
+        job_timeout=settings.run_job_timeout_seconds,
+        result_ttl=settings.job_result_ttl_seconds,
+        retry=Retry(max=1),
+        meta={"student_id": current_user.id},
+    )
+    return JobEnqueuedResponse(job_id=job.id)
 
 
-@router.post("/submit", response_model=SubmitCodeResult, dependencies=[Depends(enforce_submit_rate_limit)])
+@router.post(
+    "/submit", response_model=JobEnqueuedResponse, dependencies=[Depends(enforce_submit_rate_limit)]
+)
 async def submit_code(
     payload: SubmitCodeRequest,
     current_user: User = Depends(get_current_user),
-    service: SubmissionService = Depends(_service),
-) -> SubmitCodeResult:
+    problem_repository: ProblemRepository = Depends(get_problem_repository),
+    connection: Redis = Depends(_redis),
+) -> JobEnqueuedResponse:
+    if await problem_repository.find_by_id(payload.problem_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem not found")
+
+    queue = get_queue(QUEUE_FINAL_SUBMIT, connection)
+    job = queue.enqueue(
+        submit_code_job,
+        args=(current_user.id, payload.problem_id, payload.code),
+        job_timeout=settings.submit_job_timeout_seconds,
+        result_ttl=settings.job_result_ttl_seconds,
+        retry=Retry(max=1),
+        meta={"student_id": current_user.id},
+    )
+    return JobEnqueuedResponse(job_id=job.id)
+
+
+_RQ_STATUS_MAP = {
+    "queued": "queued",
+    "scheduled": "queued",
+    "deferred": "queued",
+    "started": "processing",
+    "finished": "completed",
+    "failed": "failed",
+    "stopped": "failed",
+    "canceled": "failed",
+}
+
+
+@router.get("/jobs/{job_id}", response_model=JobStatusResponse)
+async def get_job_status(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    connection: Redis = Depends(_redis),
+) -> JobStatusResponse:
     try:
-        return await service.submit_code(current_user.id, payload.problem_id, payload.code)
-    except ProblemNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        job = Job.fetch(job_id, connection=connection)
+    except Exception as exc:  # rq raises NoSuchJobError, which isn't worth importing just for this
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found") from exc
+
+    owner_id = (job.meta or {}).get("student_id")
+    if owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your job")
+
+    rq_status = job.get_status(refresh=True)
+    mapped_status = _RQ_STATUS_MAP.get(rq_status, "queued")
+
+    result = None
+    error = None
+    if mapped_status == "completed":
+        if isinstance(job.result, dict) and "error" in job.result:
+            mapped_status = "failed"
+            error = job.result["error"]
+        else:
+            result = job.result
+    elif mapped_status == "failed":
+        error = str(job.exc_info) if job.exc_info else "The job failed unexpectedly."
+
+    return JobStatusResponse(job_id=job.id, status=mapped_status, result=result, error=error)

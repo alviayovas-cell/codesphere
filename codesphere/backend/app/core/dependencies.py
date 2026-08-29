@@ -22,7 +22,6 @@ from app.database.repositories import (
 )
 from app.models.common import UserRole
 from app.models.user import User
-from app.services.judge_service import JudgeService
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -73,10 +72,6 @@ def get_activity_event_repository() -> ActivityEventRepository:
 
 def get_topic_progress_repository() -> TopicProgressRepository:
     return TopicProgressRepository(get_db())
-
-
-def get_judge_service() -> JudgeService:
-    return JudgeService()
 
 
 _UNAUTHORIZED = HTTPException(

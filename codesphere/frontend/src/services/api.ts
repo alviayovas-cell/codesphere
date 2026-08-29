@@ -1,12 +1,12 @@
 import type {
+  JobEnqueuedResponse,
+  JobStatusResponse,
   LearningModule,
   LearningTopic,
   ProblemAdminView,
   ProblemPublic,
   ProblemSummary,
   ProgressSummary,
-  RunCodeResult,
-  SubmitCodeResult,
   TestCaseAdminView,
   TestCaseVisibility,
   User,
@@ -300,18 +300,50 @@ export function deleteTestCase(testCaseId: string): Promise<void> {
   return request<void>(`/admin/test-cases/${testCaseId}`, { method: 'DELETE' })
 }
 
-// -- Code execution -----------------------------------------------------------
+// -- Code execution (queued: enqueue, then poll job status) -------------------
+//
+// Run/Submit no longer execute inline - they enqueue a job onto a Redis/RQ
+// queue (spec section 12) and return immediately. Use pollJob to wait for
+// the result.
 
-export function runCode(problemId: string, code: string, stdin: string): Promise<RunCodeResult> {
-  return request<RunCodeResult>('/code/run', {
+export function runCode(problemId: string, code: string, stdin: string): Promise<JobEnqueuedResponse> {
+  return request<JobEnqueuedResponse>('/code/run', {
     method: 'POST',
     body: JSON.stringify({ problemId, code, stdin }),
   })
 }
 
-export function submitCode(problemId: string, code: string): Promise<SubmitCodeResult> {
-  return request<SubmitCodeResult>('/code/submit', {
+export function submitCode(problemId: string, code: string): Promise<JobEnqueuedResponse> {
+  return request<JobEnqueuedResponse>('/code/submit', {
     method: 'POST',
     body: JSON.stringify({ problemId, code }),
   })
+}
+
+export function getJobStatus(jobId: string): Promise<JobStatusResponse> {
+  return request<JobStatusResponse>(`/code/jobs/${jobId}`)
+}
+
+/** Poll a job until it completes or fails, calling onTick with each status
+ * update (useful for showing "Queued..." / "Running..." in the UI). */
+export async function pollJob(
+  jobId: string,
+  options: { intervalMs?: number; timeoutMs?: number; onTick?: (status: JobStatusResponse) => void } = {},
+): Promise<JobStatusResponse> {
+  const intervalMs = options.intervalMs ?? 1000
+  const timeoutMs = options.timeoutMs ?? 60000
+  const startedAt = Date.now()
+
+  while (true) {
+    const status = await getJobStatus(jobId)
+    options.onTick?.(status)
+
+    if (status.status === 'completed' || status.status === 'failed') {
+      return status
+    }
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new ApiError(408, 'Timed out waiting for the result. Please try again.')
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
 }

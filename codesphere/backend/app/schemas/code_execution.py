@@ -45,3 +45,22 @@ class SubmitCodeResult(BaseModel):
     compile_output: str = Field(default="", serialization_alias="compileOutput")
 
     model_config = {"populate_by_name": True}
+
+
+class JobEnqueuedResponse(BaseModel):
+    """Returned immediately when a Run/Submit request is accepted onto a
+    queue - the job itself hasn't run yet. Poll GET /code/jobs/{jobId}."""
+
+    job_id: str = Field(serialization_alias="jobId")
+    status: str = "queued"
+
+    model_config = {"populate_by_name": True}
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str = Field(serialization_alias="jobId")
+    status: str  # "queued" | "processing" | "completed" | "failed"
+    result: dict | None = None
+    error: str | None = None
+
+    model_config = {"populate_by_name": True}

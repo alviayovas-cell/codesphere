@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     run_rate_limit_per_minute: int = 5
     submit_rate_limit_per_minute: int = 3
 
+    redis_url: str = "redis://localhost:6379/0"
+    run_job_timeout_seconds: int = 45
+    submit_job_timeout_seconds: int = 120
+    job_result_ttl_seconds: int = 3600
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

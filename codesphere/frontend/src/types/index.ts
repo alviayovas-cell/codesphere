@@ -129,3 +129,17 @@ export interface SubmitCodeResult {
   testCaseResults: TestCaseResult[]
   compileOutput: string
 }
+
+export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed'
+
+export interface JobEnqueuedResponse {
+  jobId: string
+  status: JobStatus
+}
+
+export interface JobStatusResponse {
+  jobId: string
+  status: JobStatus
+  result: RunCodeResult | SubmitCodeResult | null
+  error: string | null
+}
