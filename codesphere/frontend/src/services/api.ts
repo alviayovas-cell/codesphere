@@ -1,4 +1,7 @@
 import type {
+  AssessmentConfig,
+  CodingRoundAdminView,
+  CodingRoundSummary,
   JobEnqueuedResponse,
   JobStatusResponse,
   LearningModule,
@@ -7,6 +10,8 @@ import type {
   ProblemPublic,
   ProblemSummary,
   ProgressSummary,
+  ResultConfig,
+  RoundSessionPublic,
   TestCaseAdminView,
   TestCaseVisibility,
   User,
@@ -313,10 +318,14 @@ export function runCode(problemId: string, code: string, stdin: string): Promise
   })
 }
 
-export function submitCode(problemId: string, code: string): Promise<JobEnqueuedResponse> {
+export function submitCode(
+  problemId: string,
+  code: string,
+  roundId?: string,
+): Promise<JobEnqueuedResponse> {
   return request<JobEnqueuedResponse>('/code/submit', {
     method: 'POST',
-    body: JSON.stringify({ problemId, code }),
+    body: JSON.stringify({ problemId, code, roundId }),
   })
 }
 
@@ -346,4 +355,64 @@ export async function pollJob(
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs))
   }
+}
+
+// -- Coding rounds (student-facing) ------------------------------------------
+
+export function getRounds(): Promise<CodingRoundSummary[]> {
+  return request<CodingRoundSummary[]>('/rounds')
+}
+
+export function startRound(roundId: string): Promise<RoundSessionPublic> {
+  return request<RoundSessionPublic>(`/rounds/${roundId}/start`, { method: 'POST' })
+}
+
+export function getRoundSession(roundId: string): Promise<RoundSessionPublic> {
+  return request<RoundSessionPublic>(`/rounds/${roundId}/session`)
+}
+
+export function finishRound(roundId: string): Promise<RoundSessionPublic> {
+  return request<RoundSessionPublic>(`/rounds/${roundId}/submit`, { method: 'POST' })
+}
+
+// -- Coding rounds (admin management) ----------------------------------------
+
+export interface CodingRoundInput {
+  title: string
+  description: string
+  durationMinutes: number
+  startTime: string
+  endTime: string
+  problemIds: string[]
+  assessmentConfiguration?: Partial<AssessmentConfig>
+  resultConfiguration?: Partial<ResultConfig>
+}
+
+export function listRoundsAdmin(): Promise<CodingRoundAdminView[]> {
+  return request<CodingRoundAdminView[]>('/admin/rounds')
+}
+
+export function getRoundAdmin(roundId: string): Promise<CodingRoundAdminView> {
+  return request<CodingRoundAdminView>(`/admin/rounds/${roundId}`)
+}
+
+export function createRound(payload: CodingRoundInput): Promise<CodingRoundAdminView> {
+  return request<CodingRoundAdminView>('/admin/rounds', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateRound(
+  roundId: string,
+  payload: Partial<CodingRoundInput> & { status?: string },
+): Promise<CodingRoundAdminView> {
+  return request<CodingRoundAdminView>(`/admin/rounds/${roundId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteRound(roundId: string): Promise<void> {
+  return request<void>(`/admin/rounds/${roundId}`, { method: 'DELETE' })
 }

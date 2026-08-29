@@ -1,25 +1,30 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from app.core.dependencies import (
+    get_coding_round_repository,
     get_current_admin_user,
     get_learning_module_repository,
     get_learning_topic_repository,
     get_problem_repository,
+    get_round_session_repository,
     get_test_case_repository,
     get_topic_progress_repository,
     get_user_repository,
 )
+from app.database.repositories.coding_round_repository import CodingRoundRepository
 from app.database.repositories.learning_repository import (
     LearningModuleRepository,
     LearningTopicRepository,
 )
 from app.database.repositories.problem_repository import ProblemRepository, TestCaseRepository
 from app.database.repositories.progress_repository import TopicProgressRepository
+from app.database.repositories.round_session_repository import RoundSessionRepository
 from app.database.repositories.user_repository import UserRepository
 from app.models.common import UserRole
 from app.models.user import User
 from app.schemas.admin import PasswordResetResponse, StudentImportResult
 from app.schemas.auth import UserPublic, to_user_public
+from app.schemas.coding_round import CodingRoundAdminView, CodingRoundCreate, CodingRoundUpdate
 from app.schemas.learning import (
     LearningModuleCreate,
     LearningModulePublic,
@@ -35,6 +40,11 @@ from app.schemas.problem import (
     TestCaseAdminView,
     TestCaseCreate,
     TestCaseUpdate,
+)
+from app.services.coding_round_service import (
+    CodingRoundService,
+    InvalidRoundConfigError,
+    RoundNotFoundError,
 )
 from app.services.learning_service import (
     LearningService,
@@ -65,6 +75,29 @@ def _problem_service(
     test_case_repository: TestCaseRepository = Depends(get_test_case_repository),
 ) -> ProblemService:
     return ProblemService(problem_repository, test_case_repository)
+
+
+def _round_service(
+    round_repository: CodingRoundRepository = Depends(get_coding_round_repository),
+    session_repository: RoundSessionRepository = Depends(get_round_session_repository),
+    problem_repository: ProblemRepository = Depends(get_problem_repository),
+) -> CodingRoundService:
+    return CodingRoundService(round_repository, session_repository, problem_repository)
+
+
+def _to_round_admin_view(round_) -> CodingRoundAdminView:
+    return CodingRoundAdminView(
+        id=round_.id,
+        title=round_.title,
+        description=round_.description,
+        duration_minutes=round_.duration_minutes,
+        start_time=round_.start_time,
+        end_time=round_.end_time,
+        status=round_.status,
+        problem_ids=round_.problem_ids,
+        assessment_configuration=round_.assessment_configuration.model_dump(),
+        result_configuration=round_.result_configuration.model_dump(),
+    )
 
 
 @router.get("/students", response_model=list[UserPublic])
@@ -324,4 +357,67 @@ async def delete_test_case(
     try:
         await service.delete_test_case(test_case_id)
     except TestCaseNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/rounds", response_model=list[CodingRoundAdminView])
+async def list_rounds(
+    _: User = Depends(get_current_admin_user),
+    service: CodingRoundService = Depends(_round_service),
+) -> list[CodingRoundAdminView]:
+    rounds = await service.list_rounds_admin()
+    return [_to_round_admin_view(r) for r in rounds]
+
+
+@router.get("/rounds/{round_id}", response_model=CodingRoundAdminView)
+async def get_round(
+    round_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: CodingRoundService = Depends(_round_service),
+) -> CodingRoundAdminView:
+    try:
+        round_ = await service.get_round_admin(round_id)
+    except RoundNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _to_round_admin_view(round_)
+
+
+@router.post("/rounds", response_model=CodingRoundAdminView, status_code=status.HTTP_201_CREATED)
+async def create_round(
+    payload: CodingRoundCreate,
+    _: User = Depends(get_current_admin_user),
+    service: CodingRoundService = Depends(_round_service),
+) -> CodingRoundAdminView:
+    try:
+        round_ = await service.create_round(payload)
+    except InvalidRoundConfigError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return _to_round_admin_view(round_)
+
+
+@router.put("/rounds/{round_id}", response_model=CodingRoundAdminView)
+async def update_round(
+    round_id: str,
+    payload: CodingRoundUpdate,
+    _: User = Depends(get_current_admin_user),
+    service: CodingRoundService = Depends(_round_service),
+) -> CodingRoundAdminView:
+    try:
+        round_ = await service.update_round(round_id, payload)
+    except RoundNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except InvalidRoundConfigError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return _to_round_admin_view(round_)
+
+
+@router.delete("/rounds/{round_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_round(
+    round_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: CodingRoundService = Depends(_round_service),
+) -> None:
+    try:
+        await service.delete_round(round_id)
+    except RoundNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

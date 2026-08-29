@@ -22,6 +22,7 @@ codesphere/
 **Phase 5: Coding Problem Bank** — complete.
 **Phase 6: Monaco Editor and Judge0** — complete.
 **Phase 7: Redis and RQ Queue** — complete.
+**Phase 8: Coding Round System** — complete.
 
 Implemented so far:
 - Frontend scaffold (React + TypeScript + Vite + Tailwind CSS + React Router) with placeholder pages.
@@ -53,8 +54,14 @@ Implemented so far:
 - Job tracking: RQ's own job states are mapped to the simplified state model from spec section 12 (`queued`/`processing`/`completed`/`failed`), each job is scoped to the student who created it (`meta.student_id`, checked on every status read — a `403` if you try to read someone else's job), and job/network failures get one automatic RQ-level retry on top of `JudgeService`'s own Judge0-level retry.
 - `GET /api/health/queue` — reports Redis connectivity, per-queue job counts, and active worker count (spec: "Queue health monitoring").
 - The synchronous Judge0 client from Phase 6 gained a twin, `SyncJudgeService` (same payload/response handling, just `httpx.Client` instead of `AsyncClient`) for use inside the synchronous RQ worker process; `SubmissionService` from Phase 6 was removed as dead code now that `app/workers/jobs.py` is the single source of truth for Run/Submit logic.
+- **Coding round system** (spec section 13): admin creates a round with a title, description, time window, duration, and a pool of problems (`POST`/`GET`/`PUT`/`DELETE /api/admin/rounds`, draft by default — `PUT` with `status: "scheduled"` publishes it). Students see only published rounds (`GET /api/rounds`, question pool hidden until they start), `POST /api/rounds/{id}/start` creates a session (idempotent — re-starting returns the same session, never resets the timer) and assigns every problem in the pool, in order, to every student the same way — Phase 9's "Smart Question Randomization" will replace only the *assignment* logic with a balanced/diversified per-student subset, reusing this same session storage.
+- **Server-authoritative timing**: a session's `expiresAt` is computed once at start as `min(now + durationMinutes, round.endTime)`, so a student can never work past the round's global end time even if they start late. There's no background job yet — the server lazily flips an active-but-overdue session to `expired` the next time it's read or acted on (every session read, plus before accepting a submission), which is enough to make the cutoff actually stick everywhere that matters.
+- **Session locking**: `POST /api/rounds/{id}/submit` is the "Final Submission" — it locks the session (`submitted`, idempotent), after which further round-scoped submissions return `409`. An expired session is locked the same way, automatically.
+- `POST /api/code/submit` gained an optional `roundId` — when present, it's validated against the caller's session (must be `active`, the problem must actually be assigned to them) before being queued, and the resulting `Submission` is tagged with the round. If the round's `resultConfiguration.showResultsDuringRound` is `false` (the default), the live verdict/score/test-case breakdown is redacted from the response (spec section 19's Assessment Mode) — the real graded result is still stored for later, only what's shown to the student during the round is withheld.
+- Frontend: `/student/rounds` (list with Start/Continue/View depending on status), `/student/rounds/:id` (question list + live countdown + Finish Round), and `/student/rounds/:id/problems/:id` reuses the same Monaco coding interface from Phase 6/7 with a round-aware header (countdown badge, locked-state messaging, redacted-results messaging). Admin gets `/admin/rounds` (create with a problem picker, publish/unpublish, delete). The dashboard's "Upcoming Coding Rounds" placeholder now shows real data.
+- **Found and fixed a real timezone bug during this phase**: PyMongo/Motor return naive datetimes (no tzinfo) unless the client is created with `tz_aware=True` — comparing that against `datetime.now(timezone.utc)` (needed for all the expiry logic above) raises `TypeError`. This hadn't surfaced in earlier phases because none of them did datetime *comparisons* against DB-loaded values. Fixed in both `database/mongodb.py` (the async client) and `workers/jobs.py` (the sync one).
 
-Everything else described in the project specification (coding rounds, etc.) is **not yet implemented** and will be added in later phases.
+Everything else described in the project specification (Smart Question Randomization, Autosave and Assessment Monitoring, etc.) is **not yet implemented** and will be added in later phases.
 
 ## Prerequisites
 
@@ -264,3 +271,23 @@ This creates the 10 named DS01-DS10 problems from the spec, each with 2 public a
 - Job results are kept in Redis for `JOB_RESULT_TTL_SECONDS` (default 1 hour) via RQ's `result_ttl` — after that, `GET /api/code/jobs/{id}` will 404 even for a job that really did complete. Submissions are still safely in MongoDB either way; only the ephemeral job-result cache expires.
 - Rate limiting is still the in-memory, per-process limiter from Phase 6 (unchanged) — it governs the *enqueue* step, not queue processing itself, so it still doesn't coordinate across multiple FastAPI processes. Redis now exists in the stack and would be a natural backing store for a distributed version, but that wasn't required by this phase's spec and wasn't built.
 - No job cancellation endpoint — once enqueued, a job runs to completion (or its timeout) even if the student navigates away; the frontend just stops polling.
+
+## Testing Phase 8
+
+1. Start Redis, `python -m app.workers.run_worker`, backend, and frontend.
+2. Log in as admin, visit `/admin/rounds`, click "New Round", pick a start/end time window that includes right now, select 2-3 problems, and create it. It starts as `draft` — click "Publish".
+3. Log in as a student, visit `/student/rounds` (or the dashboard's "Upcoming Coding Rounds" card) — the round should show "Open now" with a "Start Round" button.
+4. Click Start Round — you land on the round hub with a live countdown and a list of questions. Click a question, confirm the same coding interface from Phase 6/7 loads with a countdown badge in the header.
+5. Submit a solution — if the round's `showResultsDuringRound` is off (the default), you should see a generic "Submitted" message with no verdict/score, not the usual pass/fail breakdown.
+6. Go back to the round hub, click "Finish Round" — status becomes "submitted", and returning to a question page should show it's locked (Run/Submit disabled, a message explaining why).
+7. Refresh the round hub page mid-round (before finishing) — confirm the timer keeps counting from the right place and the assigned questions haven't changed (the session persists server-side).
+8. Try starting a round whose time window hasn't opened yet, or has already closed (create one with `/docs` if needed) — should be rejected with a clear message.
+
+## Known Limitations (Phase 8)
+
+- **No real MongoDB was available in this environment** (same as prior phases). The full round lifecycle — admin config validation, publish/draft visibility, idempotent start, server-computed expiry (`min(now + duration, round.endTime)`), the lazy active→expired transition, session locking, cascade delete, and round-scoped submission validation/redaction — was verified with 32 checks against an in-memory Mongo mock, plus two further HTTP-level passes against a real Judge0-backed worker: 14 checks covering the full student flow (list → start → round-scoped submit with redaction → finish → rejection after finishing) and 10 checks covering admin CRUD end-to-end. **Not** verified against real MongoDB Atlas or through an actual browser session — please run through the steps above yourself.
+- **Found and fixed a real bug during this phase**: naive-vs-aware datetime comparison (see above) — would have crashed every round-timing check with a `TypeError` the first time it ran against a real, non-mocked MongoDB (mongomock happens to preserve whatever tzinfo you hand it, which is why this didn't fail even in the mocked tests until `tz_aware=True` was set explicitly to match).
+- **No automatic auto-submit-on-expiry yet.** The spec's full workflow ("when time expires: retrieve latest autosaved code → trigger auto submission") needs Autosave, which is Phase 10. Today, when a session's time runs out, it's marked `expired` and locked — same practical effect (no more submissions accepted) — but the student's last _saved_ (not autosaved, since that doesn't exist yet) submission per problem is whatever they explicitly clicked Submit on before time ran out. Phase 10 will complete the "auto-submit with the last autosaved code" half of this.
+- Question assignment is intentionally naive: every student gets every problem in the round's pool, in the same order. Phase 9 ("Smart Question Randomization") replaces only this assignment step with a balanced, diversified-per-student subset — the session storage (`assignedQuestions`) doesn't need to change for that.
+- No admin visibility into round sessions/violations yet (who's started, who's finished, timing) — that's Phase 11 (Results) and Phase 12 (admin monitoring dashboard) territory; Phase 8 only covers round CRUD.
+- The admin round form doesn't yet expose `assessmentConfiguration` (grace period, max violations) or `resultConfiguration` beyond what's needed to test redaction — the backend accepts them fully; extend the form later once Phase 10 needs them.

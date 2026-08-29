@@ -37,6 +37,13 @@ class CodingRound(MongoBaseModel):
     start_time: datetime = Field(alias="startTime")
     end_time: datetime = Field(alias="endTime")
     status: RoundStatus = RoundStatus.DRAFT
+    # The pool of problems eligible for this round. Phase 8 assigns every
+    # student the full pool, in this order (naive/deterministic). Phase 9's
+    # "Smart Question Randomization" will use question_pool_configuration
+    # below to instead assign a balanced, diversified subset per student
+    # from this same pool - assigned_questions storage doesn't need to
+    # change for that upgrade.
+    problem_ids: list[str] = Field(default_factory=list, alias="problemIds")
     question_pool_configuration: QuestionPoolConfiguration = Field(
         default_factory=QuestionPoolConfiguration, alias="questionPoolConfiguration"
     )

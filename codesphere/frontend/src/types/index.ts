@@ -143,3 +143,62 @@ export interface JobStatusResponse {
   result: RunCodeResult | SubmitCodeResult | null
   error: string | null
 }
+
+export type RoundStatus = 'draft' | 'scheduled' | 'active' | 'ended'
+export type SessionStatus = 'not_started' | 'active' | 'submitted' | 'expired' | 'locked'
+
+export interface CodingRoundSummary {
+  id: string
+  title: string
+  description: string
+  durationMinutes: number
+  startTime: string
+  endTime: string
+  questionCount: number
+  totalMarks: number
+  hasStartedWindow: boolean
+  hasEnded: boolean
+  studentStatus: SessionStatus | null
+}
+
+export interface AssessmentConfig {
+  gracePeriodSeconds: number
+  maxViolations: number
+  autoSubmitEnabled: boolean
+}
+
+export interface ResultConfig {
+  showResultsDuringRound: boolean
+  showTestCaseCount: boolean
+  showScoreImmediately: boolean
+}
+
+export interface CodingRoundAdminView {
+  id: string
+  title: string
+  description: string
+  durationMinutes: number
+  startTime: string
+  endTime: string
+  status: RoundStatus
+  problemIds: string[]
+  assessmentConfiguration: AssessmentConfig
+  resultConfiguration: ResultConfig
+}
+
+export interface AssignedQuestion {
+  problemId: string
+  difficulty: Difficulty
+  order: number
+}
+
+export interface RoundSessionPublic {
+  id: string
+  roundId: string
+  status: SessionStatus
+  startedAt: string
+  expiresAt: string
+  remainingSeconds: number
+  assignedQuestions: AssignedQuestion[]
+  violationCount: number
+}

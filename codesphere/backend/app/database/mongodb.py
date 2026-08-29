@@ -31,7 +31,14 @@ mongodb = MongoDB()
 
 
 async def connect_to_mongo() -> None:
-    mongodb.client = AsyncIOMotorClient(settings.mongodb_uri, serverSelectionTimeoutMS=5000)
+    # tz_aware=True: without it, PyMongo/Motor return naive datetimes (UTC
+    # values with no tzinfo) for anything round-tripped through Mongo, while
+    # datetime.now(timezone.utc) is aware - comparing the two raises
+    # TypeError. Round/session expiry logic (Phase 8+) depends on comparing
+    # "now" against DB-loaded timestamps, so this must be set from the start.
+    mongodb.client = AsyncIOMotorClient(
+        settings.mongodb_uri, serverSelectionTimeoutMS=5000, tz_aware=True
+    )
     mongodb.database = mongodb.client[settings.mongodb_db_name]
     try:
         await mongodb.client.admin.command("ping")

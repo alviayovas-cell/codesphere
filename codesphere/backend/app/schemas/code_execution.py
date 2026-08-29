@@ -26,6 +26,7 @@ class RunCodeResult(BaseModel):
 class SubmitCodeRequest(BaseModel):
     problem_id: str = Field(validation_alias="problemId")
     code: str
+    round_id: str | None = Field(default=None, validation_alias="roundId")
 
     model_config = {"populate_by_name": True}
 

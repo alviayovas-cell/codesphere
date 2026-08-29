@@ -7,10 +7,14 @@ from app.core.config import settings
 from app.core.dependencies import (
     enforce_run_rate_limit,
     enforce_submit_rate_limit,
+    get_coding_round_repository,
     get_current_user,
     get_problem_repository,
+    get_round_session_repository,
 )
+from app.database.repositories.coding_round_repository import CodingRoundRepository
 from app.database.repositories.problem_repository import ProblemRepository
+from app.database.repositories.round_session_repository import RoundSessionRepository
 from app.models.user import User
 from app.schemas.code_execution import (
     JobEnqueuedResponse,
@@ -18,6 +22,7 @@ from app.schemas.code_execution import (
     RunCodeRequest,
     SubmitCodeRequest,
 )
+from app.services.coding_round_service import CodingRoundService, SessionNotActiveError, SessionNotFoundError
 from app.workers.jobs import run_code_job, submit_code_job
 from app.workers.queue_config import (
     QUEUE_FINAL_SUBMIT,
@@ -62,15 +67,26 @@ async def submit_code(
     payload: SubmitCodeRequest,
     current_user: User = Depends(get_current_user),
     problem_repository: ProblemRepository = Depends(get_problem_repository),
+    round_repository: CodingRoundRepository = Depends(get_coding_round_repository),
+    session_repository: RoundSessionRepository = Depends(get_round_session_repository),
     connection: Redis = Depends(_redis),
 ) -> JobEnqueuedResponse:
     if await problem_repository.find_by_id(payload.problem_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem not found")
 
+    if payload.round_id is not None:
+        round_service = CodingRoundService(round_repository, session_repository, problem_repository)
+        try:
+            await round_service.assert_can_submit(payload.round_id, current_user.id, payload.problem_id)
+        except SessionNotFoundError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        except SessionNotActiveError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
     queue = get_queue(QUEUE_FINAL_SUBMIT, connection)
     job = queue.enqueue(
         submit_code_job,
-        args=(current_user.id, payload.problem_id, payload.code),
+        args=(current_user.id, payload.problem_id, payload.code, payload.round_id),
         job_timeout=settings.submit_job_timeout_seconds,
         result_ttl=settings.job_result_ttl_seconds,
         retry=Retry(max=1),

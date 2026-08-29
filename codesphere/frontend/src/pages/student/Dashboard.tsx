@@ -2,16 +2,18 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import * as api from '../../services/api'
-import type { LearningModule, ProgressSummary } from '../../types'
+import type { CodingRoundSummary, LearningModule, ProgressSummary } from '../../types'
 
 export default function StudentDashboard() {
   const { user } = useAuth()
   const [progress, setProgress] = useState<ProgressSummary | null>(null)
   const [modules, setModules] = useState<LearningModule[] | null>(null)
+  const [rounds, setRounds] = useState<CodingRoundSummary[] | null>(null)
 
   useEffect(() => {
     api.getProgress().then(setProgress).catch(() => setProgress(null))
     api.getModules().then(setModules).catch(() => setModules(null))
+    api.getRounds().then(setRounds).catch(() => setRounds(null))
   }, [])
 
   const percent =
@@ -82,7 +84,30 @@ export default function StudentDashboard() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
           Upcoming Coding Rounds
         </h2>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Coming in a later phase.</p>
+        {rounds === null ? (
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading...</p>
+        ) : rounds.filter((r) => !r.hasEnded).length === 0 ? (
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">No coding rounds are open right now.</p>
+        ) : (
+          <div className="mt-2 flex flex-col gap-2">
+            {rounds
+              .filter((r) => !r.hasEnded)
+              .slice(0, 3)
+              .map((r) => (
+                <Link
+                  key={r.id}
+                  to={r.studentStatus ? `/student/rounds/${r.id}` : '/student/rounds'}
+                  className="block rounded-md border border-gray-200 p-3 hover:border-gray-400 dark:border-gray-800 dark:hover:border-gray-600"
+                >
+                  <p className="text-gray-900 dark:text-white">{r.title}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {r.questionCount} questions &middot; {r.durationMinutes} min
+                    {r.studentStatus === 'active' && ' · in progress'}
+                  </p>
+                </Link>
+              ))}
+          </div>
+        )}
       </section>
 
       <section className="mt-8">

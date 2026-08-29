@@ -6,6 +6,7 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import LearningManagement from './pages/admin/LearningManagement'
 import ProblemAdminDetail from './pages/admin/ProblemAdminDetail'
 import ProblemManagement from './pages/admin/ProblemManagement'
+import RoundManagement from './pages/admin/RoundManagement'
 import ChangePassword from './pages/ChangePassword'
 import Home from './pages/Home'
 import Login from './pages/Login'
@@ -15,6 +16,8 @@ import Learning from './pages/student/Learning'
 import LearningTopicPage from './pages/student/LearningTopic'
 import ProblemDetail from './pages/student/ProblemDetail'
 import Problems from './pages/student/Problems'
+import RoundSession from './pages/student/RoundSession'
+import Rounds from './pages/student/Rounds'
 
 function App() {
   return (
@@ -72,6 +75,30 @@ function App() {
           }
         />
         <Route
+          path="/student/rounds"
+          element={
+            <ProtectedRoute requiredRole="student">
+              <Rounds />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/student/rounds/:roundId"
+          element={
+            <ProtectedRoute requiredRole="student">
+              <RoundSession />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/student/rounds/:roundId/problems/:problemId"
+          element={
+            <ProtectedRoute requiredRole="student">
+              <ProblemDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/admin/dashboard"
           element={
             <ProtectedRoute requiredRole="admin">
@@ -100,6 +127,14 @@ function App() {
           element={
             <ProtectedRoute requiredRole="admin">
               <ProblemAdminDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/rounds"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <RoundManagement />
             </ProtectedRoute>
           }
         />

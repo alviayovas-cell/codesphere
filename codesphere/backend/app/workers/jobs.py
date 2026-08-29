@@ -30,7 +30,10 @@ _client: MongoClient | None = None
 def _get_db():
     global _client
     if _client is None:
-        _client = MongoClient(settings.mongodb_uri)
+        # tz_aware=True: keep datetimes read back from Mongo comparable with
+        # datetime.now(timezone.utc) - see the matching note in
+        # app/database/mongodb.py.
+        _client = MongoClient(settings.mongodb_uri, tz_aware=True)
     return _client[settings.mongodb_db_name]
 
 
@@ -78,10 +81,16 @@ def _execute_case(judge: SyncJudgeService, code: str, test_case: dict) -> Execut
         return _unreachable_result()
 
 
-def submit_code_job(student_id: str, problem_id: str, code: str) -> dict:
+def submit_code_job(student_id: str, problem_id: str, code: str, round_id: str | None = None) -> dict:
     """Submit Code: run every test case (public + hidden), score, and
     persist a Submission. Returns a dict matching the SubmitCodeResult
-    schema."""
+    schema.
+
+    When round_id is set (a round-context submission), the round's
+    resultConfiguration.showResultsDuringRound controls whether the
+    returned payload includes live verdict/score/test-case details or a
+    redacted "submitted" placeholder - either way, the full graded result
+    is still stored on the Submission for later (Phase 11 Results)."""
     db = _get_db()
     if not ObjectId.is_valid(problem_id):
         return {"error": "Problem not found"}
@@ -127,7 +136,7 @@ def submit_code_job(student_id: str, problem_id: str, code: str) -> dict:
     inserted = db.submissions.insert_one(
         {
             "studentId": student_id,
-            "roundId": None,
+            "roundId": round_id,
             "problemId": problem_id,
             "code": code,
             "language": "C",
@@ -140,12 +149,33 @@ def submit_code_job(student_id: str, problem_id: str, code: str) -> dict:
         }
     )
 
+    show_results = True
+    if round_id and ObjectId.is_valid(round_id):
+        round_doc = db.coding_rounds.find_one({"_id": ObjectId(round_id)})
+        if round_doc is not None:
+            show_results = bool(
+                (round_doc.get("resultConfiguration") or {}).get("showResultsDuringRound", False)
+            )
+
+    if show_results:
+        return {
+            "submissionId": str(inserted.inserted_id),
+            "verdict": verdict.value,
+            "score": score,
+            "passedTests": passed,
+            "totalTests": total,
+            "testCaseResults": case_results,
+            "compileOutput": compile_output,
+        }
+
+    # Redacted: confirm the submission was recorded without revealing
+    # correctness, matching spec section 19's Assessment Mode policy.
     return {
         "submissionId": str(inserted.inserted_id),
-        "verdict": verdict.value,
-        "score": score,
-        "passedTests": passed,
+        "verdict": "pending",
+        "score": 0,
+        "passedTests": 0,
         "totalTests": total,
-        "testCaseResults": case_results,
-        "compileOutput": compile_output,
+        "testCaseResults": [],
+        "compileOutput": "",
     }

@@ -1,9 +1,10 @@
 import Editor from '@monaco-editor/react'
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { formatCountdown, useCountdown } from '../../hooks/useCountdown'
 import * as api from '../../services/api'
 import { ApiError } from '../../services/api'
-import type { JobStatus, ProblemPublic, RunCodeResult, SubmitCodeResult, Verdict } from '../../types'
+import type { JobStatus, ProblemPublic, RoundSessionPublic, RunCodeResult, SubmitCodeResult, Verdict } from '../../types'
 
 const DEFAULT_TEMPLATE = '#include <stdio.h>\n\nint main() {\n    \n    return 0;\n}\n'
 
@@ -32,9 +33,11 @@ function draftKey(problemId: string) {
 }
 
 export default function ProblemDetail() {
-  const { problemId } = useParams<{ problemId: string }>()
+  const { problemId, roundId } = useParams<{ problemId: string; roundId?: string }>()
+  const navigate = useNavigate()
   const [problem, setProblem] = useState<ProblemPublic | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [roundSession, setRoundSession] = useState<RoundSessionPublic | null>(null)
 
   const [code, setCode] = useState(DEFAULT_TEMPLATE)
   const [stdin, setStdin] = useState('')
@@ -72,6 +75,14 @@ export default function ProblemDetail() {
     }
   }, [problemId, code])
 
+  useEffect(() => {
+    if (!roundId) return
+    api.getRoundSession(roundId).then(setRoundSession).catch(() => setRoundSession(null))
+  }, [roundId])
+
+  const remaining = useCountdown(roundSession?.remainingSeconds ?? 0)
+  const roundLocked = roundSession !== null && roundSession.status !== 'active'
+
   async function handleRun() {
     if (!problemId) return
     setActionError(null)
@@ -103,7 +114,7 @@ export default function ProblemDetail() {
     setSubmitting(true)
     setJobPhase('queued')
     try {
-      const { jobId } = await api.submitCode(problemId, code)
+      const { jobId } = await api.submitCode(problemId, code, roundId)
       const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status) })
       if (finalStatus.status === 'failed') {
         setActionError(finalStatus.error ?? 'The submit job failed.')
@@ -145,14 +156,36 @@ export default function ProblemDetail() {
       <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
         {/* Left: problem statement */}
         <div className="w-full overflow-y-auto border-b border-gray-200 p-4 dark:border-gray-800 md:w-1/2 md:border-b-0 md:border-r">
-          <Link to="/student/problems" className="text-sm text-gray-500 underline dark:text-gray-400">
-            &larr; Back to problems
-          </Link>
+          {roundId ? (
+            <button
+              type="button"
+              onClick={() => navigate(`/student/rounds/${roundId}`)}
+              className="text-sm text-gray-500 underline dark:text-gray-400"
+            >
+              &larr; Back to round
+            </button>
+          ) : (
+            <Link to="/student/problems" className="text-sm text-gray-500 underline dark:text-gray-400">
+              &larr; Back to problems
+            </Link>
+          )}
 
           <div className="mt-3 flex items-baseline justify-between">
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{problem.title}</h1>
-            <span className="text-sm text-gray-500 dark:text-gray-400">{problem.marks} marks</span>
+            <div className="flex items-center gap-2">
+              {roundId && roundSession?.status === 'active' && (
+                <span className="rounded bg-gray-900 px-2 py-0.5 font-mono text-xs text-white dark:bg-white dark:text-gray-900">
+                  {formatCountdown(remaining)}
+                </span>
+              )}
+              <span className="text-sm text-gray-500 dark:text-gray-400">{problem.marks} marks</span>
+            </div>
           </div>
+          {roundLocked && (
+            <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
+              This round is {roundSession?.status} — submissions are no longer accepted.
+            </p>
+          )}
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {problem.topic} &middot; <span className="capitalize">{problem.difficulty}</span>
           </p>
@@ -208,7 +241,7 @@ export default function ProblemDetail() {
               <button
                 type="button"
                 onClick={handleRun}
-                disabled={running || submitting}
+                disabled={running || submitting || roundLocked}
                 className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200"
               >
                 {running ? (jobPhase ? jobPhaseLabel[jobPhase] : 'Running...') : 'Run Code'}
@@ -216,7 +249,7 @@ export default function ProblemDetail() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={running || submitting}
+                disabled={running || submitting || roundLocked}
                 className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-gray-900"
               >
                 {submitting ? (jobPhase ? jobPhaseLabel[jobPhase] : 'Submitting...') : 'Submit Code'}
@@ -290,28 +323,37 @@ export default function ProblemDetail() {
               </div>
             )}
 
-            {submitResult && (
+            {submitResult && submitResult.verdict === 'pending' && submitResult.testCaseResults.length === 0 ? (
               <div className="border-t border-gray-100 p-3 dark:border-gray-800">
-                <p className={`text-sm font-semibold ${verdictColor[submitResult.verdict]}`}>
-                  {verdictLabel[submitResult.verdict]}
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Submitted</p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Results for this round aren't shown until it's over.
                 </p>
-                <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
-                  Score: {submitResult.score} &middot; Passed {submitResult.passedTests}/{submitResult.totalTests}{' '}
-                  test cases
-                </p>
-                {submitResult.compileOutput && (
-                  <pre className="mt-2 whitespace-pre-wrap rounded bg-red-50 p-2 text-xs text-red-800 dark:bg-red-950 dark:text-red-200">
-                    {submitResult.compileOutput}
-                  </pre>
-                )}
-                <ul className="mt-2 flex flex-col gap-1">
-                  {submitResult.testCaseResults.map((tc) => (
-                    <li key={tc.index} className={`text-sm ${verdictColor[tc.verdict]}`}>
-                      Test Case {tc.index}: {tc.verdict === 'accepted' ? 'Passed' : verdictLabel[tc.verdict]}
-                    </li>
-                  ))}
-                </ul>
               </div>
+            ) : (
+              submitResult && (
+                <div className="border-t border-gray-100 p-3 dark:border-gray-800">
+                  <p className={`text-sm font-semibold ${verdictColor[submitResult.verdict]}`}>
+                    {verdictLabel[submitResult.verdict]}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                    Score: {submitResult.score} &middot; Passed {submitResult.passedTests}/{submitResult.totalTests}{' '}
+                    test cases
+                  </p>
+                  {submitResult.compileOutput && (
+                    <pre className="mt-2 whitespace-pre-wrap rounded bg-red-50 p-2 text-xs text-red-800 dark:bg-red-950 dark:text-red-200">
+                      {submitResult.compileOutput}
+                    </pre>
+                  )}
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {submitResult.testCaseResults.map((tc) => (
+                      <li key={tc.index} className={`text-sm ${verdictColor[tc.verdict]}`}>
+                        Test Case {tc.index}: {tc.verdict === 'accepted' ? 'Passed' : verdictLabel[tc.verdict]}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
             )}
           </div>
         </div>
