@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import Dropdown, { DropdownItem } from '../ui/Dropdown'
 import { ChevronDownIcon, MenuIcon, SettingsIcon, UserIcon } from '../ui/Icons'
+import ThemeToggle from '../ui/ThemeToggle'
 import { adminNav, studentNav } from './navConfig'
 
 function pageTitle(pathname: string, role?: string): string {
@@ -54,6 +55,11 @@ export default function TopNavbar({ onOpenMobileMenu }: { onOpenMobileMenu: () =
           <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">{user?.name}</p>
           <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user?.email}</p>
         </div>
+        <div className="flex items-center justify-between gap-2 px-3 py-2">
+          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Theme</span>
+          <ThemeToggle showLabels={false} />
+        </div>
+        <div className="border-t border-zinc-100 dark:border-zinc-800" />
         <DropdownItem onClick={() => navigate('/change-password')}>
           <SettingsIcon className="h-4 w-4" /> Change Password
         </DropdownItem>

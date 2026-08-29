@@ -4,6 +4,12 @@
 @import "@fontsource/inter/600.css";
 @import "@fontsource/inter/700.css";
 
+/* Class-based dark mode: `dark:` utilities apply when a `.dark` class is
+   present on an ancestor (set on <html> by ThemeProvider), instead of
+   Tailwind's default prefers-color-scheme media query. This is what lets
+   the app support an explicit Light/Dark choice in addition to System. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
   Design tokens (spec: colors, typography, spacing, radius, shadows).
   Primary = indigo (one strong accent). Secondary = purple, used sparingly
@@ -51,7 +57,10 @@
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
 }
 
 body {
@@ -59,6 +68,21 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  background-color: var(--color-white);
+  color: var(--color-zinc-900);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.dark body {
+  /* zinc-950, a dark neutral - never pure black, per the design brief. */
+  background-color: var(--color-zinc-950);
+  color: var(--color-zinc-50);
+}
+
+/* Subtle theme-switch transitions on the app's structural chrome. Scoped
+   to specific elements (not a blanket `*` rule) to stay fast and avoid
+   fighting other transitions (e.g. hover states). */
+.theme-transition {
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 
 /* Thin, unobtrusive scrollbars for panels (editor output, sidebars, etc.) */

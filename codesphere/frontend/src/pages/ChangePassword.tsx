@@ -4,8 +4,9 @@ import { useAuth } from '../context/AuthContext'
 import * as api from '../services/api'
 import { ApiError } from '../services/api'
 import Button from '../components/ui/Button'
-import { Input } from '../components/ui/Field'
+import { PasswordInput } from '../components/ui/PasswordInput'
 import { InlineError } from '../components/ui/ErrorState'
+import ThemeToggle from '../components/ui/ThemeToggle'
 import { AlertIcon, CodeIcon } from '../components/ui/Icons'
 
 export default function ChangePassword() {
@@ -19,6 +20,7 @@ export default function ChangePassword() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    if (submitting) return
     setError(null)
 
     if (newPassword !== confirmPassword) {
@@ -45,11 +47,14 @@ export default function ChangePassword() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white">
-            <CodeIcon className="h-4 w-4" />
-          </span>
-          <span className="text-lg font-semibold text-zinc-900 dark:text-white">CodeSphere</span>
+        <div className="mb-6 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white">
+              <CodeIcon className="h-4 w-4" />
+            </span>
+            <span className="text-lg font-semibold text-zinc-900 dark:text-white">CodeSphere</span>
+          </div>
+          <ThemeToggle showLabels={false} />
         </div>
 
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white">Change Password</h1>
@@ -62,30 +67,30 @@ export default function ChangePassword() {
         )}
 
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-          <Input
+          <PasswordInput
             label="Current Password"
             id="currentPassword"
-            type="password"
             required
+            autoComplete="current-password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
           />
-          <Input
+          <PasswordInput
             label="New Password"
             id="newPassword"
-            type="password"
             required
             minLength={8}
+            autoComplete="new-password"
             hint="At least 8 characters."
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
           />
-          <Input
+          <PasswordInput
             label="Confirm New Password"
             id="confirmPassword"
-            type="password"
             required
             minLength={8}
+            autoComplete="new-password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
           />

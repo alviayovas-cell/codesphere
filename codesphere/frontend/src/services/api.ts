@@ -55,7 +55,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.Authorization = `Bearer ${authToken}`
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
+  } catch {
+    // fetch() itself threw - the request never reached the server (offline,
+    // DNS failure, CORS, backend down, etc.), as opposed to the server
+    // responding with an error status.
+    throw new ApiError(0, 'Unable to connect to the server. Please try again.')
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => null)
@@ -133,11 +141,16 @@ export async function importStudents(file: File): Promise<StudentImportResult> {
     headers.Authorization = `Bearer ${authToken}`
   }
 
-  const response = await fetch(`${API_BASE_URL}/admin/students/import`, {
-    method: 'POST',
-    headers,
-    body: formData,
-  })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}/admin/students/import`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    })
+  } catch {
+    throw new ApiError(0, 'Unable to connect to the server. Please try again.')
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => null)

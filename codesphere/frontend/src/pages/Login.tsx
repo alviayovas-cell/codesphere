@@ -4,7 +4,9 @@ import { useAuth } from '../context/AuthContext'
 import { ApiError } from '../services/api'
 import Button from '../components/ui/Button'
 import { Input } from '../components/ui/Field'
+import { PasswordInput } from '../components/ui/PasswordInput'
 import { InlineError } from '../components/ui/ErrorState'
+import ThemeToggle from '../components/ui/ThemeToggle'
 import { CodeIcon } from '../components/ui/Icons'
 
 export default function Login() {
@@ -22,6 +24,7 @@ export default function Login() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    if (submitting) return // guard against rapid repeat submits (e.g. double Enter)
     setError(null)
     setSubmitting(true)
     try {
@@ -61,11 +64,14 @@ export default function Login() {
       {/* Form panel */}
       <div className="flex w-full flex-col justify-center px-6 py-12 sm:px-12 lg:w-1/2 lg:px-20">
         <div className="mx-auto w-full max-w-sm">
-          <div className="mb-8 flex items-center gap-2 lg:hidden">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white">
-              <CodeIcon className="h-4 w-4" />
-            </span>
-            <span className="text-lg font-semibold text-zinc-900 dark:text-white">CodeSphere</span>
+          <div className="mb-8 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white lg:hidden">
+                <CodeIcon className="h-4 w-4" />
+              </span>
+              <span className="text-lg font-semibold text-zinc-900 dark:text-white lg:hidden">CodeSphere</span>
+            </div>
+            <ThemeToggle showLabels={false} />
           </div>
 
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white">Welcome back</h1>
@@ -83,10 +89,9 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-            <Input
+            <PasswordInput
               label="Password"
               id="password"
-              type="password"
               required
               autoComplete="current-password"
               value={password}
@@ -96,7 +101,7 @@ export default function Login() {
             {error && <InlineError message={error} />}
 
             <Button type="submit" variant="primary" loading={submitting} className="mt-2 w-full">
-              {submitting ? 'Logging in...' : 'Login'}
+              {submitting ? 'Signing in...' : 'Login'}
             </Button>
           </form>
         </div>

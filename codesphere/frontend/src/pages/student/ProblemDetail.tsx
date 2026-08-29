@@ -2,6 +2,7 @@ import Editor from '@monaco-editor/react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useCountdown } from '../../hooks/useCountdown'
+import { useTheme } from '../../context/ThemeContext'
 import * as api from '../../services/api'
 import { ApiError } from '../../services/api'
 import type { JobStatus, ProblemPublic, RoundSessionPublic, RunCodeResult, SubmitCodeResult } from '../../types'
@@ -26,6 +27,7 @@ type PanelTab = 'tests' | 'output' | 'errors'
 export default function ProblemDetail() {
   const { problemId, roundId } = useParams<{ problemId: string; roundId?: string }>()
   const navigate = useNavigate()
+  const { resolvedTheme } = useTheme()
   const [problem, setProblem] = useState<ProblemPublic | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [roundSession, setRoundSession] = useState<RoundSessionPublic | null>(null)
@@ -240,7 +242,7 @@ export default function ProblemDetail() {
             <Editor
               height="100%"
               defaultLanguage="c"
-              theme="vs-dark"
+              theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
               value={code}
               onChange={(value) => setCode(value ?? '')}
               options={{ minimap: { enabled: false }, fontSize: 14 }}

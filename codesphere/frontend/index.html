@@ -5,6 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CodeSphere</title>
+    <script>
+      // Apply the saved/system theme before first paint, so there's no
+      // visible flash of the wrong theme while React boots.
+      (function () {
+        try {
+          var stored = localStorage.getItem('codesphere-theme');
+          var mode = stored === 'light' || stored === 'dark' ? stored : 'system';
+          var resolved =
+            mode === 'system'
+              ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+              : mode;
+          if (resolved === 'dark') document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

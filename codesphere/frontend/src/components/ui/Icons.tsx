@@ -76,3 +76,19 @@ export const ExpandIcon = base(<path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" 
 export const LaptopIcon = base(
   <path d="M4 5h16v10H4V5zM2 19h20M9 19l1-4M15 19l-1-4" />,
 )
+export const SunIcon = base(
+  <>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+  </>,
+)
+export const MoonIcon = base(<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />)
+export const EyeIcon = base(
+  <>
+    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+    <circle cx="12" cy="12" r="3" />
+  </>,
+)
+export const EyeOffIcon = base(
+  <path d="M17.94 17.94A10.94 10.94 0 0112 20c-7 0-11-8-11-8a20.29 20.29 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a20.35 20.35 0 01-2.16 3.19M14.12 14.12a3 3 0 11-4.24-4.24M1 1l22 22" />,
+)
