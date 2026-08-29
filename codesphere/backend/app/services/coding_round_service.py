@@ -5,11 +5,11 @@ from app.database.repositories.problem_repository import ProblemRepository
 from app.database.repositories.round_session_repository import RoundSessionRepository
 from app.models.coding_round import (
     AssessmentConfiguration,
-    AssignedQuestion,
     CodingRound,
+    QuestionPoolConfiguration,
     ResultConfiguration,
 )
-from app.models.common import RoundStatus, SessionStatus
+from app.models.common import Difficulty, RoundStatus, SessionStatus
 from app.models.round_session import RoundSession
 from app.schemas.coding_round import (
     AssignedQuestionPublic,
@@ -18,6 +18,7 @@ from app.schemas.coding_round import (
     CodingRoundUpdate,
     RoundSessionPublic,
 )
+from app.services.question_assignment_service import QuestionAssignmentService, uses_smart_assignment
 
 
 class RoundNotFoundError(Exception):
@@ -50,11 +51,13 @@ class CodingRoundService:
         self.round_repository = round_repository
         self.session_repository = session_repository
         self.problem_repository = problem_repository
+        self.question_assignment_service = QuestionAssignmentService(problem_repository, session_repository)
 
     # -- admin ---------------------------------------------------------------
 
     async def create_round(self, payload: CodingRoundCreate) -> CodingRound:
-        await self._validate_config(payload.start_time, payload.end_time, payload.problem_ids)
+        pool_config = QuestionPoolConfiguration(**payload.question_pool_configuration.model_dump())
+        await self._validate_config(payload.start_time, payload.end_time, payload.problem_ids, pool_config)
 
         return await self.round_repository.insert_one(
             CodingRound(
@@ -65,6 +68,7 @@ class CodingRoundService:
                 end_time=payload.end_time,
                 status=RoundStatus.DRAFT,
                 problem_ids=payload.problem_ids,
+                question_pool_configuration=pool_config,
                 assessment_configuration=AssessmentConfiguration(
                     **payload.assessment_configuration.model_dump()
                 ),
@@ -80,7 +84,12 @@ class CodingRoundService:
         start_time = payload.start_time or existing.start_time
         end_time = payload.end_time or existing.end_time
         problem_ids = payload.problem_ids if payload.problem_ids is not None else existing.problem_ids
-        await self._validate_config(start_time, end_time, problem_ids)
+        pool_config = (
+            QuestionPoolConfiguration(**payload.question_pool_configuration.model_dump())
+            if payload.question_pool_configuration is not None
+            else existing.question_pool_configuration
+        )
+        await self._validate_config(start_time, end_time, problem_ids, pool_config)
 
         update = payload.model_dump(by_alias=True, exclude_unset=True)
         if not update:
@@ -114,7 +123,11 @@ class CodingRoundService:
         return round_
 
     async def _validate_config(
-        self, start_time: datetime, end_time: datetime, problem_ids: list[str]
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        problem_ids: list[str],
+        pool_config: QuestionPoolConfiguration,
     ) -> None:
         if end_time <= start_time:
             raise InvalidRoundConfigError("End time must be after start time")
@@ -123,6 +136,12 @@ class CodingRoundService:
         for problem_id in problem_ids:
             if await self.problem_repository.find_by_id(problem_id) is None:
                 raise InvalidRoundConfigError(f"Problem {problem_id} not found")
+
+        pool_errors = await self.question_assignment_service.validate_pool_can_satisfy(
+            problem_ids, pool_config
+        )
+        if pool_errors:
+            raise InvalidRoundConfigError("; ".join(pool_errors))
 
     # -- student ---------------------------------------------------------------
 
@@ -133,11 +152,7 @@ class CodingRoundService:
 
         summaries: list[CodingRoundSummary] = []
         for round_ in rounds:
-            total_marks = 0
-            for problem_id in round_.problem_ids:
-                problem = await self.problem_repository.find_by_id(problem_id)
-                if problem is not None:
-                    total_marks += problem.marks
+            question_count, total_marks = await self._estimate_question_count_and_marks(round_)
 
             session = await self.session_repository.find_one(
                 {"roundId": round_.id, "studentId": student_id}
@@ -150,7 +165,7 @@ class CodingRoundService:
                     duration_minutes=round_.duration_minutes,
                     start_time=round_.start_time,
                     end_time=round_.end_time,
-                    question_count=len(round_.problem_ids),
+                    question_count=question_count,
                     total_marks=total_marks,
                     has_started_window=now >= round_.start_time,
                     has_ended=now > round_.end_time,
@@ -158,6 +173,37 @@ class CodingRoundService:
                 )
             )
         return summaries
+
+    async def _estimate_question_count_and_marks(self, round_: CodingRound) -> tuple[int, int]:
+        """For the pre-start round listing: with smart assignment active,
+        each student's actual combination varies, so this reports the
+        configured count and an estimate of total marks (using the first N
+        pool problems per difficulty, in list order - a representative
+        combination, not necessarily what any one student gets)."""
+        config = round_.question_pool_configuration
+        if not uses_smart_assignment(config):
+            total_marks = 0
+            for problem_id in round_.problem_ids:
+                problem = await self.problem_repository.find_by_id(problem_id)
+                if problem is not None:
+                    total_marks += problem.marks
+            return len(round_.problem_ids), total_marks
+
+        buckets = await self.question_assignment_service.group_pool_by_difficulty(round_.problem_ids)
+        requested = [
+            (config.easy_questions, buckets[Difficulty.EASY]),
+            (config.medium_questions, buckets[Difficulty.MEDIUM]),
+            (config.hard_questions, buckets[Difficulty.HARD]),
+        ]
+        question_count = 0
+        total_marks = 0
+        for count, pool in requested:
+            for problem_id in pool[:count]:
+                problem = await self.problem_repository.find_by_id(problem_id)
+                if problem is not None:
+                    question_count += 1
+                    total_marks += problem.marks
+        return question_count, total_marks
 
     async def start_round(self, round_id: str, student_id: str) -> RoundSession:
         round_ = await self.round_repository.find_by_id(round_id)
@@ -177,14 +223,7 @@ class CodingRoundService:
         if now > round_.end_time:
             raise RoundNotAvailableError("This round has already ended")
 
-        assigned_questions = [
-            AssignedQuestion(
-                problem_id=problem_id,
-                difficulty=(await self.problem_repository.find_by_id(problem_id)).difficulty,
-                order=index + 1,
-            )
-            for index, problem_id in enumerate(round_.problem_ids)
-        ]
+        assigned_questions = await self.question_assignment_service.assign_questions(round_)
         expires_at = min(now + timedelta(minutes=round_.duration_minutes), round_.end_time)
 
         session = await self.session_repository.insert_one(

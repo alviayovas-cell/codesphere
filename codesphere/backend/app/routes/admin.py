@@ -95,6 +95,7 @@ def _to_round_admin_view(round_) -> CodingRoundAdminView:
         end_time=round_.end_time,
         status=round_.status,
         problem_ids=round_.problem_ids,
+        question_pool_configuration=round_.question_pool_configuration.model_dump(),
         assessment_configuration=round_.assessment_configuration.model_dump(),
         result_configuration=round_.result_configuration.model_dump(),
     )

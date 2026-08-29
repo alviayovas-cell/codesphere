@@ -13,6 +13,19 @@ class AssessmentConfigurationInput(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class QuestionPoolConfigurationInput(BaseModel):
+    easy_questions: int = Field(default=0, serialization_alias="easyQuestions", validation_alias="easyQuestions")
+    medium_questions: int = Field(
+        default=0, serialization_alias="mediumQuestions", validation_alias="mediumQuestions"
+    )
+    hard_questions: int = Field(default=0, serialization_alias="hardQuestions", validation_alias="hardQuestions")
+    randomize_order: bool = Field(
+        default=True, serialization_alias="randomizeOrder", validation_alias="randomizeOrder"
+    )
+
+    model_config = {"populate_by_name": True}
+
+
 class ResultConfigurationInput(BaseModel):
     show_results_during_round: bool = Field(
         default=False, serialization_alias="showResultsDuringRound", validation_alias="showResultsDuringRound"
@@ -34,6 +47,11 @@ class CodingRoundCreate(BaseModel):
     start_time: datetime = Field(serialization_alias="startTime", validation_alias="startTime")
     end_time: datetime = Field(serialization_alias="endTime", validation_alias="endTime")
     problem_ids: list[str] = Field(serialization_alias="problemIds", validation_alias="problemIds")
+    question_pool_configuration: QuestionPoolConfigurationInput = Field(
+        default_factory=QuestionPoolConfigurationInput,
+        serialization_alias="questionPoolConfiguration",
+        validation_alias="questionPoolConfiguration",
+    )
     assessment_configuration: AssessmentConfigurationInput = Field(
         default_factory=AssessmentConfigurationInput,
         serialization_alias="assessmentConfiguration",
@@ -56,6 +74,9 @@ class CodingRoundUpdate(BaseModel):
     end_time: datetime | None = Field(default=None, serialization_alias="endTime", validation_alias="endTime")
     problem_ids: list[str] | None = Field(default=None, serialization_alias="problemIds", validation_alias="problemIds")
     status: RoundStatus | None = None
+    question_pool_configuration: QuestionPoolConfigurationInput | None = Field(
+        default=None, serialization_alias="questionPoolConfiguration", validation_alias="questionPoolConfiguration"
+    )
     assessment_configuration: AssessmentConfigurationInput | None = Field(
         default=None, serialization_alias="assessmentConfiguration", validation_alias="assessmentConfiguration"
     )
@@ -94,6 +115,7 @@ class CodingRoundAdminView(BaseModel):
     end_time: datetime = Field(serialization_alias="endTime")
     status: RoundStatus
     problem_ids: list[str] = Field(serialization_alias="problemIds")
+    question_pool_configuration: QuestionPoolConfigurationInput = Field(serialization_alias="questionPoolConfiguration")
     assessment_configuration: AssessmentConfigurationInput = Field(serialization_alias="assessmentConfiguration")
     result_configuration: ResultConfigurationInput = Field(serialization_alias="resultConfiguration")
 

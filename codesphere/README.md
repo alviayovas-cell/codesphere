@@ -23,6 +23,7 @@ codesphere/
 **Phase 6: Monaco Editor and Judge0** — complete.
 **Phase 7: Redis and RQ Queue** — complete.
 **Phase 8: Coding Round System** — complete.
+**Phase 9: Smart Question Randomization** — complete.
 
 Implemented so far:
 - Frontend scaffold (React + TypeScript + Vite + Tailwind CSS + React Router) with placeholder pages.
@@ -61,7 +62,13 @@ Implemented so far:
 - Frontend: `/student/rounds` (list with Start/Continue/View depending on status), `/student/rounds/:id` (question list + live countdown + Finish Round), and `/student/rounds/:id/problems/:id` reuses the same Monaco coding interface from Phase 6/7 with a round-aware header (countdown badge, locked-state messaging, redacted-results messaging). Admin gets `/admin/rounds` (create with a problem picker, publish/unpublish, delete). The dashboard's "Upcoming Coding Rounds" placeholder now shows real data.
 - **Found and fixed a real timezone bug during this phase**: PyMongo/Motor return naive datetimes (no tzinfo) unless the client is created with `tz_aware=True` — comparing that against `datetime.now(timezone.utc)` (needed for all the expiry logic above) raises `TypeError`. This hadn't surfaced in earlier phases because none of them did datetime *comparisons* against DB-loaded values. Fixed in both `database/mongodb.py` (the async client) and `workers/jobs.py` (the sync one).
 
-Everything else described in the project specification (Smart Question Randomization, Autosave and Assessment Monitoring, etc.) is **not yet implemented** and will be added in later phases.
+- **Smart Question Randomization** (spec section 14, `app/services/question_assignment_service.py`): a round's admin-set `questionPoolConfiguration` (`easyQuestions`/`mediumQuestions`/`hardQuestions`/`randomizeOrder`, already present in the data model since Phase 2) now actually drives assignment. Every student gets the exact same difficulty mix (fairness), but *which* problem within each difficulty bucket varies — the algorithm always picks the currently least-used problem in that bucket first (ties broken randomly), so usage spreads evenly across the pool over many students instead of everyone getting the same combination (diversity). Question order is shuffled per student when `randomizeOrder` is on.
+- **Backward compatible by design**: a round with no pool configuration (all counts 0, the schema default) falls back to Phase 8's original behavior — assign the whole selected pool, in listed order — so existing simple rounds are unaffected; smart assignment is opt-in per round.
+- **Pool-size validation at round creation/update**: if the admin asks for more questions of a difficulty than the selected pool actually contains (e.g. 2 hard questions but only 1 hard problem picked), the request is rejected with a clear message rather than silently under-assigning students later.
+- Assignment still only ever happens once per (round, student) — `start_round`'s existing idempotency (Phase 8) means refreshing or restarting never re-randomizes what a student already got.
+- Frontend: the admin round form gained Easy/Medium/Hard count fields and a randomize-order checkbox (leave all at 0 for the old simple "assign everything" mode), and each round card shows its configured balance when smart assignment is on.
+
+Everything else described in the project specification (Autosave and Assessment Monitoring, Results and Leaderboard, etc.) is **not yet implemented** and will be added in later phases.
 
 ## Prerequisites
 
@@ -291,3 +298,17 @@ This creates the 10 named DS01-DS10 problems from the spec, each with 2 public a
 - Question assignment is intentionally naive: every student gets every problem in the round's pool, in the same order. Phase 9 ("Smart Question Randomization") replaces only this assignment step with a balanced, diversified-per-student subset — the session storage (`assignedQuestions`) doesn't need to change for that.
 - No admin visibility into round sessions/violations yet (who's started, who's finished, timing) — that's Phase 11 (Results) and Phase 12 (admin monitoring dashboard) territory; Phase 8 only covers round CRUD.
 - The admin round form doesn't yet expose `assessmentConfiguration` (grace period, max violations) or `resultConfiguration` beyond what's needed to test redaction — the backend accepts them fully; extend the form later once Phase 10 needs them.
+
+## Testing Phase 9
+
+1. Start backend, worker, and frontend. Log in as admin, visit `/admin/rounds`, create a round selecting several problems across difficulties (or use the seeded DS01-DS10 problems, which span easy/medium/hard), set Easy=1, Medium=1, Hard=1, leave "Randomize question order" checked, and publish it.
+2. Log in as several different students (or the same one in different browser profiles) and start the round — each should get exactly 3 questions, one of each difficulty, but not necessarily the *same* specific problems as each other, and not always in the same order.
+3. Refresh the round page repeatedly, and try starting the round again from `/student/rounds` — the assigned questions and their order must stay exactly the same every time (never re-randomized).
+4. In `/admin/rounds`, try creating a round with e.g. Hard=5 but only 1-2 hard problems selected in the pool — should be rejected with a clear "pool has only N hard problem(s)" message.
+5. Create a round with all three counts left at 0 — confirm it behaves exactly like a Phase 8 round (every selected problem assigned to every student, in the order selected).
+
+## Known Limitations (Phase 9)
+
+- **No real MongoDB was available in this environment** (same as prior phases). The assignment algorithm was verified with 21 checks against an in-memory Mongo mock: pool-size validation, exact difficulty balance across 20 simulated students, diversity (with a 2-problem hard pool and 3-problem easy pool, usage came out 10/10 and 7/7/6 respectively — close to perfectly even), refresh/restart protection (byte-for-byte identical assignment), genuine order randomization (all 6 possible difficulty-orderings of a 3-question round appeared across 20 students), and Phase 8 backward compatibility. A further 5 HTTP-level checks confirmed `questionPoolConfiguration` round-trips correctly through the real create/update API and actually drives assignment. **Not** verified against real MongoDB Atlas or through an actual browser session — please run through the steps above yourself.
+- Diversity uses a greedy least-used-first heuristic, not a global optimizer — it's provably fair per-difficulty (always picks the currently least-represented problem) but doesn't try to prevent, say, two students who are also getting the same easy problem from also matching on medium. For a club-sized round (tens of students, pools of a handful of problems per difficulty) this is more than sufficient to defeat casual glance-at-your-neighbor's-screen copying, which is the spec's stated goal.
+- The "estimated total marks" shown on `/student/rounds` before starting is computed from a representative combination (the first N pool problems per difficulty, in list order), not the specific combination that student will actually receive — the real total appears once they start. This only matters if problems of the same difficulty carry different mark values; the seeded DS problems don't, so the estimate is always exact in the dev preview.

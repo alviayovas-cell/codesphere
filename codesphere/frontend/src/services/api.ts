@@ -10,6 +10,7 @@ import type {
   ProblemPublic,
   ProblemSummary,
   ProgressSummary,
+  QuestionPoolConfig,
   ResultConfig,
   RoundSessionPublic,
   TestCaseAdminView,
@@ -384,6 +385,7 @@ export interface CodingRoundInput {
   startTime: string
   endTime: string
   problemIds: string[]
+  questionPoolConfiguration?: Partial<QuestionPoolConfig>
   assessmentConfiguration?: Partial<AssessmentConfig>
   resultConfiguration?: Partial<ResultConfig>
 }

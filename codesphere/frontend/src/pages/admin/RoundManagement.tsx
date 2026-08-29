@@ -10,6 +10,10 @@ interface FormState {
   startTime: string
   endTime: string
   problemIds: string[]
+  easyQuestions: string
+  mediumQuestions: string
+  hardQuestions: string
+  randomizeOrder: boolean
 }
 
 const emptyForm: FormState = {
@@ -19,6 +23,10 @@ const emptyForm: FormState = {
   startTime: '',
   endTime: '',
   problemIds: [],
+  easyQuestions: '0',
+  mediumQuestions: '0',
+  hardQuestions: '0',
+  randomizeOrder: true,
 }
 
 function toLocalInputValue(iso: string) {
@@ -63,6 +71,12 @@ export default function RoundManagement() {
         startTime: new Date(form.startTime).toISOString(),
         endTime: new Date(form.endTime).toISOString(),
         problemIds: form.problemIds,
+        questionPoolConfiguration: {
+          easyQuestions: Number(form.easyQuestions) || 0,
+          mediumQuestions: Number(form.mediumQuestions) || 0,
+          hardQuestions: Number(form.hardQuestions) || 0,
+          randomizeOrder: form.randomizeOrder,
+        },
       })
       setForm(emptyForm)
       setShowForm(false)
@@ -155,6 +169,54 @@ export default function RoundManagement() {
           </div>
 
           <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Smart Randomization (optional)
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Leave all at 0 to assign every selected problem to every student, in order (simple mode). Set counts to
+            have each student get a balanced, randomized combination instead.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="w-24 text-xs text-gray-500 dark:text-gray-400">
+              Easy
+              <input
+                type="number"
+                min={0}
+                value={form.easyQuestions}
+                onChange={(e) => setForm({ ...form, easyQuestions: e.target.value })}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+              />
+            </label>
+            <label className="w-24 text-xs text-gray-500 dark:text-gray-400">
+              Medium
+              <input
+                type="number"
+                min={0}
+                value={form.mediumQuestions}
+                onChange={(e) => setForm({ ...form, mediumQuestions: e.target.value })}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+              />
+            </label>
+            <label className="w-24 text-xs text-gray-500 dark:text-gray-400">
+              Hard
+              <input
+                type="number"
+                min={0}
+                value={form.hardQuestions}
+                onChange={(e) => setForm({ ...form, hardQuestions: e.target.value })}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+              />
+            </label>
+            <label className="flex items-center gap-2 pb-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={form.randomizeOrder}
+                onChange={(e) => setForm({ ...form, randomizeOrder: e.target.checked })}
+              />
+              Randomize question order
+            </label>
+          </div>
+
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
             Problems ({form.problemIds.length} selected)
           </p>
           <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md border border-gray-100 p-2 dark:border-gray-800">
@@ -200,10 +262,20 @@ export default function RoundManagement() {
             </div>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{round.description}</p>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {round.problemIds.length} question{round.problemIds.length === 1 ? '' : 's'} &middot;{' '}
+              {round.problemIds.length} problem{round.problemIds.length === 1 ? '' : 's'} in pool &middot;{' '}
               {round.durationMinutes} min &middot; {toLocalInputValue(round.startTime)} &ndash;{' '}
               {toLocalInputValue(round.endTime)}
             </p>
+            {(round.questionPoolConfiguration.easyQuestions > 0 ||
+              round.questionPoolConfiguration.mediumQuestions > 0 ||
+              round.questionPoolConfiguration.hardQuestions > 0) && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Smart assignment: {round.questionPoolConfiguration.easyQuestions} easy,{' '}
+                {round.questionPoolConfiguration.mediumQuestions} medium,{' '}
+                {round.questionPoolConfiguration.hardQuestions} hard per student
+                {round.questionPoolConfiguration.randomizeOrder ? ', randomized order' : ''}
+              </p>
+            )}
             <div className="mt-3 flex gap-2 text-sm">
               <button type="button" onClick={() => handlePublishToggle(round)} className="text-blue-600 underline">
                 {round.status === 'draft' ? 'Publish' : 'Unpublish'}

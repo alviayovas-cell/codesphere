@@ -161,6 +161,13 @@ export interface CodingRoundSummary {
   studentStatus: SessionStatus | null
 }
 
+export interface QuestionPoolConfig {
+  easyQuestions: number
+  mediumQuestions: number
+  hardQuestions: number
+  randomizeOrder: boolean
+}
+
 export interface AssessmentConfig {
   gracePeriodSeconds: number
   maxViolations: number
@@ -182,6 +189,7 @@ export interface CodingRoundAdminView {
   endTime: string
   status: RoundStatus
   problemIds: string[]
+  questionPoolConfiguration: QuestionPoolConfig
   assessmentConfiguration: AssessmentConfig
   resultConfiguration: ResultConfig
 }
