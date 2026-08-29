@@ -1,4 +1,14 @@
-import type { LearningModule, LearningTopic, ProgressSummary, User } from '../types'
+import type {
+  LearningModule,
+  LearningTopic,
+  ProblemAdminView,
+  ProblemPublic,
+  ProblemSummary,
+  ProgressSummary,
+  TestCaseAdminView,
+  TestCaseVisibility,
+  User,
+} from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
 
@@ -212,4 +222,78 @@ export function updateTopic(
 
 export function deleteTopic(topicId: string): Promise<void> {
   return request<void>(`/admin/learning/topics/${topicId}`, { method: 'DELETE' })
+}
+
+// -- Problems (student-facing) -----------------------------------------------
+
+export function getProblems(): Promise<ProblemSummary[]> {
+  return request<ProblemSummary[]>('/problems')
+}
+
+export function getProblem(problemId: string): Promise<ProblemPublic> {
+  return request<ProblemPublic>(`/problems/${problemId}`)
+}
+
+// -- Problems (admin management) ---------------------------------------------
+
+export interface ProblemExampleInput {
+  input: string
+  output: string
+  explanation?: string | null
+}
+
+export interface ProblemInput {
+  title: string
+  slug?: string | null
+  description: string
+  inputFormat: string
+  outputFormat: string
+  constraints: string
+  examples?: ProblemExampleInput[]
+  difficulty: 'easy' | 'medium' | 'hard'
+  topic: string
+  language?: string
+  marks: number
+}
+
+export function createProblem(payload: ProblemInput): Promise<ProblemAdminView> {
+  return request<ProblemAdminView>('/admin/problems', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function getProblemAdmin(problemId: string): Promise<ProblemAdminView> {
+  return request<ProblemAdminView>(`/admin/problems/${problemId}`)
+}
+
+export function updateProblem(
+  problemId: string,
+  payload: Partial<ProblemInput>,
+): Promise<ProblemAdminView> {
+  return request<ProblemAdminView>(`/admin/problems/${problemId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteProblem(problemId: string): Promise<void> {
+  return request<void>(`/admin/problems/${problemId}`, { method: 'DELETE' })
+}
+
+export interface TestCaseInput {
+  input: string
+  expectedOutput: string
+  visibility: TestCaseVisibility
+}
+
+export function createTestCase(problemId: string, payload: TestCaseInput): Promise<TestCaseAdminView> {
+  return request<TestCaseAdminView>(`/admin/problems/${problemId}/test-cases`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteTestCase(testCaseId: string): Promise<void> {
+  return request<void>(`/admin/test-cases/${testCaseId}`, { method: 'DELETE' })
 }

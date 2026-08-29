@@ -20,7 +20,9 @@ export default function Navbar() {
           <>
             <Link to={user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard'}>Dashboard</Link>
             {user.role === 'student' && <Link to="/student/learning">Learning</Link>}
+            {user.role === 'student' && <Link to="/student/problems">Problems</Link>}
             {user.role === 'admin' && <Link to="/admin/learning">Learning Management</Link>}
+            {user.role === 'admin' && <Link to="/admin/problems">Problem Management</Link>}
             <Link to="/change-password">Change Password</Link>
             <span className="text-gray-400 dark:text-gray-500">{user.name}</span>
             <button type="button" onClick={handleLogout} className="text-gray-600 underline dark:text-gray-300">

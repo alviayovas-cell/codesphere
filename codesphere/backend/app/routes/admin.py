@@ -4,6 +4,8 @@ from app.core.dependencies import (
     get_current_admin_user,
     get_learning_module_repository,
     get_learning_topic_repository,
+    get_problem_repository,
+    get_test_case_repository,
     get_topic_progress_repository,
     get_user_repository,
 )
@@ -11,6 +13,7 @@ from app.database.repositories.learning_repository import (
     LearningModuleRepository,
     LearningTopicRepository,
 )
+from app.database.repositories.problem_repository import ProblemRepository, TestCaseRepository
 from app.database.repositories.progress_repository import TopicProgressRepository
 from app.database.repositories.user_repository import UserRepository
 from app.models.common import UserRole
@@ -25,10 +28,24 @@ from app.schemas.learning import (
     LearningTopicPublic,
     LearningTopicUpdate,
 )
+from app.schemas.problem import (
+    ProblemAdminView,
+    ProblemCreate,
+    ProblemUpdate,
+    TestCaseAdminView,
+    TestCaseCreate,
+    TestCaseUpdate,
+)
 from app.services.learning_service import (
     LearningService,
     ModuleNotFoundError,
     TopicNotFoundError,
+)
+from app.services.problem_service import (
+    DuplicateSlugError,
+    ProblemNotFoundError,
+    ProblemService,
+    TestCaseNotFoundError,
 )
 from app.services.student_service import StudentNotFoundError, StudentService
 
@@ -41,6 +58,13 @@ def _learning_service(
     progress_repository: TopicProgressRepository = Depends(get_topic_progress_repository),
 ) -> LearningService:
     return LearningService(module_repository, topic_repository, progress_repository)
+
+
+def _problem_service(
+    problem_repository: ProblemRepository = Depends(get_problem_repository),
+    test_case_repository: TestCaseRepository = Depends(get_test_case_repository),
+) -> ProblemService:
+    return ProblemService(problem_repository, test_case_repository)
 
 
 @router.get("/students", response_model=list[UserPublic])
@@ -190,4 +214,114 @@ async def delete_topic(
     try:
         await service.delete_topic(topic_id)
     except TopicNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post("/problems", response_model=ProblemAdminView, status_code=status.HTTP_201_CREATED)
+async def create_problem(
+    payload: ProblemCreate,
+    _: User = Depends(get_current_admin_user),
+    service: ProblemService = Depends(_problem_service),
+) -> ProblemAdminView:
+    try:
+        problem = await service.create_problem(payload)
+    except DuplicateSlugError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    return await service.get_problem_admin(problem.id)
+
+
+@router.get("/problems/{problem_id}", response_model=ProblemAdminView)
+async def get_problem_admin(
+    problem_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: ProblemService = Depends(_problem_service),
+) -> ProblemAdminView:
+    try:
+        return await service.get_problem_admin(problem_id)
+    except ProblemNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.put("/problems/{problem_id}", response_model=ProblemAdminView)
+async def update_problem(
+    problem_id: str,
+    payload: ProblemUpdate,
+    _: User = Depends(get_current_admin_user),
+    service: ProblemService = Depends(_problem_service),
+) -> ProblemAdminView:
+    try:
+        await service.update_problem(problem_id, payload)
+        return await service.get_problem_admin(problem_id)
+    except ProblemNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.delete("/problems/{problem_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_problem(
+    problem_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: ProblemService = Depends(_problem_service),
+) -> None:
+    try:
+        await service.delete_problem(problem_id)
+    except ProblemNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/problems/{problem_id}/test-cases",
+    response_model=TestCaseAdminView,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_test_case(
+    problem_id: str,
+    payload: TestCaseCreate,
+    _: User = Depends(get_current_admin_user),
+    service: ProblemService = Depends(_problem_service),
+) -> TestCaseAdminView:
+    try:
+        test_case = await service.create_test_case(problem_id, payload)
+    except ProblemNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return TestCaseAdminView(
+        id=test_case.id,
+        problem_id=test_case.problem_id,
+        input=test_case.input,
+        expected_output=test_case.expected_output,
+        visibility=test_case.visibility,
+    )
+
+
+@router.put("/test-cases/{test_case_id}", response_model=TestCaseAdminView)
+async def update_test_case(
+    test_case_id: str,
+    payload: TestCaseUpdate,
+    _: User = Depends(get_current_admin_user),
+    service: ProblemService = Depends(_problem_service),
+) -> TestCaseAdminView:
+    try:
+        test_case = await service.update_test_case(test_case_id, payload)
+    except TestCaseNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return TestCaseAdminView(
+        id=test_case.id,
+        problem_id=test_case.problem_id,
+        input=test_case.input,
+        expected_output=test_case.expected_output,
+        visibility=test_case.visibility,
+    )
+
+
+@router.delete("/test-cases/{test_case_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_test_case(
+    test_case_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: ProblemService = Depends(_problem_service),
+) -> None:
+    try:
+        await service.delete_test_case(test_case_id)
+    except TestCaseNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

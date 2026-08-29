@@ -19,6 +19,7 @@ codesphere/
 **Phase 2: MongoDB Database and Core Models** — complete.
 **Phase 3: JWT Authentication** — complete.
 **Phase 4: Learning Dashboard** — complete.
+**Phase 5: Coding Problem Bank** — complete.
 
 Implemented so far:
 - Frontend scaffold (React + TypeScript + Vite + Tailwind CSS + React Router) with placeholder pages.
@@ -38,8 +39,11 @@ Implemented so far:
 - A `topic_progress` collection (student × topic completion) — not one of the collections explicitly listed in the design doc's DB design table, but required to persist "mark topic as completed" / progress tracking, which the spec calls for explicitly (section 6).
 - `backend/scripts/seed_learning_content.py` — idempotently creates the 10 named C Programming modules from spec section 6, each with one topic and a verified real YouTube reference (freeCodeCamp's full "C Programming Tutorial for Beginners" course, used as a general starting resource — see the script's docstring for why per-topic links weren't fabricated, and refine them via the admin UI).
 - Frontend: student dashboard now shows a real progress bar, a "Continue Learning" card pointing at the next incomplete topic, and a link into the full module/topic browser (`/student/learning`, `/student/learning/topics/:id`, with a mark-complete checkbox/button and embedded video where the URL is a recognizable YouTube link). Admin gets a `/admin/learning` page to create/delete modules and topics.
+- Coding problem bank: `GET /api/problems` (summary list) and `GET /api/problems/{id}` (full statement + **public test cases only**) for students. Admin gets full CRUD — `POST`/`GET`/`PUT`/`DELETE /api/admin/problems/{id}` and `POST /api/admin/problems/{id}/test-cases`, `PUT`/`DELETE /api/admin/test-cases/{id}` — with the admin view showing every test case (public and hidden) and its visibility. Hidden test cases are never included in any student-facing response, even structurally (`ProblemPublic` has no field that could carry one).
+- `backend/scripts/seed_problems.py` — idempotently creates the 10 named Data Structures problems (DS01-DS10) from spec section 8, each with 2 public and 5 hidden test cases, real problem statements, and verified-correct expected outputs (see Known Limitations below for how these were verified).
+- Frontend: `/student/problems` (sortable table of problems) and `/student/problems/:id` (full statement, examples, public test cases — no code editor yet, that's Phase 6). Admin gets `/admin/problems` (list/create/delete) and `/admin/problems/:id` (add/remove test cases, tagged public/hidden).
 
-Everything else described in the project specification (problem bank, Judge0 execution, coding rounds, etc.) is **not yet implemented** and will be added in later phases.
+Everything else described in the project specification (Judge0 execution, coding rounds, etc.) is **not yet implemented** and will be added in later phases.
 
 ## Prerequisites
 
@@ -96,6 +100,15 @@ python scripts/seed_learning_content.py
 ```
 
 This creates the 10 named modules from the spec (Introduction to C, Variables and Data Types, ... Basic Data Structures), each with one topic. It's safe to re-run — it skips any module that already exists by title.
+
+### Seeding the Data Structures problem bank
+
+```
+cd backend
+python scripts/seed_problems.py
+```
+
+This creates the 10 named DS01-DS10 problems from the spec, each with 2 public and 5 hidden test cases. Also safe to re-run (skips by slug).
 
 ## Testing Phase 1
 
@@ -165,3 +178,21 @@ This creates the 10 named modules from the spec (Introduction to C, Variables an
 - "Upcoming Coding Rounds" and "Recent Activity" on the student dashboard are placeholders — coding rounds don't exist until Phase 8, and there's no activity-log endpoint yet (only aggregate progress).
 - The admin Learning Management page supports create/delete for modules and topics, but not inline editing yet (the backend `PUT` endpoints exist and are tested — only the UI form for editing is missing). Editing is possible today via `/docs` or a REST client.
 - No drag-and-drop or bulk reordering UI — module/topic `order` is set manually via the numeric field when creating.
+
+## Testing Phase 5
+
+1. Seed the problem bank (see above), then start both backend and frontend.
+2. Log in as a student, visit `/student/problems` — you should see a table of 10 problems (DS01-DS10) with topic, difficulty, and marks.
+3. Click into "DS04 - Implement Stack Using Array" — you should see the full statement, an example, and exactly **2** public test cases. Confirm there is no hint of hidden test cases anywhere on the page or in the network response (`GET /api/problems/{id}` in devtools should show `publicTestCases` with 2 entries and nothing else test-case-related).
+4. Log in as admin, visit `/admin/problems`, click into the same problem — you should see all **7** test cases (2 public + 5 hidden), each tagged. Add a new test case, then delete it.
+5. Create a new problem via the "New Problem" form, confirm it appears in both `/admin/problems` and the student's `/student/problems`, then delete it.
+6. As a student, try `GET /api/admin/problems/{id}` directly (e.g. via `/docs`) with a student token — should return `403`.
+7. Try creating a problem with a slug that already exists (e.g. via `/docs`, `POST /api/admin/problems` with `"slug": "reverse-an-array"`) — should return `409`.
+
+## Known Limitations (Phase 5)
+
+- **No MongoDB server was available in this environment** (same as prior phases). The problem/test-case service logic (CRUD, cascade delete, duplicate-slug rejection, and — critically — that hidden test cases never appear in any student-facing response) was verified with 20 checks against an in-memory Mongo mock, plus the real `seed_problems.py` script was run twice against the same mock to confirm it creates exactly 10 problems with 2 public + 5 hidden test cases each and is idempotent. All of that was then re-verified end-to-end through the real HTTP API (student list/detail, admin create/view/delete, role-based 403). It was **not** exercised against a real MongoDB Atlas cluster or an actual browser — please verify against yours using the steps above.
+- The correctness of every seeded expected output was independently checked by writing a separate simulation of each problem's logic in Python and comparing against the hardcoded expected outputs in `seed_problems.py` — this caught and fixed one real bug (DS04's public test case #2 expected the wrong popped value after an overflow). All 70 test case outputs (10 problems × 7 cases) now match their simulations.
+- No code editor or Run/Submit yet — problem pages are read-only (statement + public test cases). That's Phase 6 (Monaco Editor and Judge0).
+- The admin "New Problem" form doesn't yet support entering examples inline (the backend accepts them via `examples` in the request body) — add them via `/docs` or a REST client for now, or extend the form later.
+- `ProblemUpdate`'s `examples` field, if provided, replaces the entire examples list rather than patching individual entries — fine for admin-driven content edits, just not a granular per-example API.

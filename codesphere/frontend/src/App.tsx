@@ -4,6 +4,8 @@ import ProtectedRoute from './components/ProtectedRoute'
 import RequireAuth from './components/RequireAuth'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import LearningManagement from './pages/admin/LearningManagement'
+import ProblemAdminDetail from './pages/admin/ProblemAdminDetail'
+import ProblemManagement from './pages/admin/ProblemManagement'
 import ChangePassword from './pages/ChangePassword'
 import Home from './pages/Home'
 import Login from './pages/Login'
@@ -11,6 +13,8 @@ import NotFound from './pages/NotFound'
 import StudentDashboard from './pages/student/Dashboard'
 import Learning from './pages/student/Learning'
 import LearningTopicPage from './pages/student/LearningTopic'
+import ProblemDetail from './pages/student/ProblemDetail'
+import Problems from './pages/student/Problems'
 
 function App() {
   return (
@@ -52,6 +56,22 @@ function App() {
           }
         />
         <Route
+          path="/student/problems"
+          element={
+            <ProtectedRoute requiredRole="student">
+              <Problems />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/student/problems/:problemId"
+          element={
+            <ProtectedRoute requiredRole="student">
+              <ProblemDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/admin/dashboard"
           element={
             <ProtectedRoute requiredRole="admin">
@@ -64,6 +84,22 @@ function App() {
           element={
             <ProtectedRoute requiredRole="admin">
               <LearningManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/problems"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <ProblemManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/problems/:problemId"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <ProblemAdminDetail />
             </ProtectedRoute>
           }
         />
