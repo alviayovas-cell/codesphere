@@ -1,5 +1,5 @@
 import Editor from '@monaco-editor/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useCountdown } from '../../hooks/useCountdown'
 import { useTheme } from '../../context/ThemeContext'
@@ -11,10 +11,19 @@ import { DifficultyBadge, VerdictBadge } from '../../components/ui/Badge'
 import Tabs from '../../components/ui/Tabs'
 import Spinner, { PageSpinner } from '../../components/ui/Spinner'
 import ErrorState, { InlineError } from '../../components/ui/ErrorState'
+import Modal from '../../components/ui/Modal'
 import MobileEditorNotice from '../../components/coding/MobileEditorNotice'
 import Timer from '../../components/coding/Timer'
-import { ChevronLeftIcon, ExpandIcon } from '../../components/ui/Icons'
+import { AlertIcon, ChevronLeftIcon, ExpandIcon } from '../../components/ui/Icons'
 import { cn } from '../../lib/cn'
+
+const AUTOSAVE_INTERVAL_MS = 12000
+
+const lockedStatusMessage: Record<string, string> = {
+  submitted: 'You have submitted this round — this problem is now read-only.',
+  expired: 'Time expired for this round — this problem is now read-only.',
+  locked: 'Your assessment was submitted automatically according to the assessment policy.',
+}
 
 const DEFAULT_TEMPLATE = '#include <stdio.h>\n\nint main() {\n    \n    return 0;\n}\n'
 
@@ -43,32 +52,54 @@ export default function ProblemDetail() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [runResult, setRunResult] = useState<RunCodeResult | null>(null)
   const [submitResult, setSubmitResult] = useState<SubmitCodeResult | null>(null)
+  const [violationWarning, setViolationWarning] = useState<{ count: number; max: number } | null>(null)
+
+  // Refs so interval/event-listener closures always see the latest values
+  // without needing to be re-registered on every keystroke.
+  const codeRef = useRef(code)
+  codeRef.current = code
+  const roundSessionRef = useRef(roundSession)
+  roundSessionRef.current = roundSession
 
   useEffect(() => {
     if (!problemId) return
     api
       .getProblem(problemId)
-      .then((p) => {
+      .then(async (p) => {
         setProblem(p)
         setStdin(p.publicTestCases[0]?.input ?? '')
-        try {
-          const saved = localStorage.getItem(draftKey(problemId))
-          if (saved) setCode(saved)
-        } catch {
-          // localStorage unavailable - fall back to the default template.
+
+        if (roundId) {
+          // Round context: the server-side autosave is the source of
+          // truth for restoring work after a refresh (spec section 15),
+          // not localStorage.
+          try {
+            const saved = await api.getAutosave(roundId, problemId)
+            if (saved) setCode(saved.code)
+          } catch {
+            // No autosave yet, or session not found - keep the default template.
+          }
+        } else {
+          try {
+            const saved = localStorage.getItem(draftKey(problemId))
+            if (saved) setCode(saved)
+          } catch {
+            // localStorage unavailable - fall back to the default template.
+          }
         }
       })
       .catch((err) => setLoadError(err instanceof ApiError ? err.message : 'Failed to load problem.'))
-  }, [problemId])
+  }, [problemId, roundId])
 
+  // Practice mode: keep the existing localStorage draft behavior.
   useEffect(() => {
-    if (!problemId) return
+    if (!problemId || roundId) return
     try {
       localStorage.setItem(draftKey(problemId), code)
     } catch {
       // Ignore storage failures (private browsing, quota, etc.) - not critical.
     }
-  }, [problemId, code])
+  }, [problemId, roundId, code])
 
   useEffect(() => {
     if (!roundId) return
@@ -77,6 +108,66 @@ export default function ProblemDetail() {
 
   const remaining = useCountdown(roundSession?.remainingSeconds ?? 0)
   const roundLocked = roundSession !== null && roundSession.status !== 'active'
+
+  // Round mode: periodic autosave + a final save on unmount (covers
+  // "save on problem change" - navigating away unmounts this page).
+  useEffect(() => {
+    if (!roundId || !problemId) return
+
+    function save() {
+      if (roundSessionRef.current?.status !== 'active') return
+      api.autosaveCode(roundId!, problemId!, codeRef.current).catch(() => {
+        // Best-effort - a failed autosave shouldn't interrupt the student.
+      })
+    }
+
+    const interval = setInterval(save, AUTOSAVE_INTERVAL_MS)
+    return () => {
+      clearInterval(interval)
+      save()
+    }
+  }, [roundId, problemId])
+
+  // Round mode: Page Visibility API + window blur/focus monitoring (spec
+  // section 16). Every event is reported to the server, which is the sole
+  // authority on grace periods, violation counts, and auto-submit/lock -
+  // this only reflects whatever the server decides back into the UI.
+  useEffect(() => {
+    if (!roundId) return
+
+    async function report(eventType: 'visibility_hidden' | 'visibility_restored' | 'window_blur' | 'window_focus') {
+      if (roundSessionRef.current?.status !== 'active') return
+      try {
+        const previousCount = roundSessionRef.current?.violationCount ?? 0
+        const updated = await api.recordActivity(roundId!, eventType)
+        setRoundSession(updated)
+        if (updated.violationCount > previousCount && updated.status === 'active') {
+          setViolationWarning({ count: updated.violationCount, max: updated.maxViolations })
+        }
+      } catch {
+        // Monitoring is a policy control, not a guarantee - don't block the student on a failed report.
+      }
+    }
+
+    function onVisibilityChange() {
+      report(document.hidden ? 'visibility_hidden' : 'visibility_restored')
+    }
+    function onBlur() {
+      report('window_blur')
+    }
+    function onFocus() {
+      report('window_focus')
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('blur', onBlur)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('blur', onBlur)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [roundId])
 
   async function handleRun() {
     if (!problemId) return
@@ -112,6 +203,10 @@ export default function ProblemDetail() {
     setSubmitResult(null)
     setSubmitting(true)
     setJobPhase('queued')
+    if (roundId) {
+      // Save before final submission (spec section 15) - best-effort, doesn't block the submit itself.
+      await api.autosaveCode(roundId, problemId, code).catch(() => {})
+    }
     try {
       const { jobId } = await api.submitCode(problemId, code, roundId)
       const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status) })
@@ -164,7 +259,12 @@ export default function ProblemDetail() {
             {roundId ? (
               <button
                 type="button"
-                onClick={() => navigate(`/student/rounds/${roundId}`)}
+                onClick={async () => {
+                  if (problemId && roundSessionRef.current?.status === 'active') {
+                    await api.autosaveCode(roundId, problemId, codeRef.current).catch(() => {})
+                  }
+                  navigate(`/student/rounds/${roundId}`)
+                }}
                 className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
               >
                 <ChevronLeftIcon className="h-4 w-4" /> Back to round
@@ -189,7 +289,12 @@ export default function ProblemDetail() {
 
             {roundLocked && (
               <div className="mt-3">
-                <InlineError message={`This round is ${roundSession?.status} — submissions are no longer accepted.`} />
+                <InlineError
+                  message={
+                    lockedStatusMessage[roundSession?.status ?? ''] ??
+                    'This round is no longer active — submissions are no longer accepted.'
+                  }
+                />
               </div>
             )}
 
@@ -414,6 +519,34 @@ export default function ProblemDetail() {
           </div>
         )}
       </div>
+
+      <Modal
+        open={violationWarning !== null}
+        onClose={() => setViolationWarning(null)}
+        title="Assessment warning"
+        footer={
+          <Button variant="primary" onClick={() => setViolationWarning(null)}>
+            I understand
+          </Button>
+        }
+      >
+        <div className="flex gap-3">
+          <AlertIcon className="h-5 w-5 shrink-0 text-amber-500" />
+          <div>
+            <p>
+              You left the assessment window. This has been recorded as violation{' '}
+              <span className="font-semibold text-zinc-900 dark:text-white">
+                {violationWarning?.count} of {violationWarning?.max}
+              </span>
+              .
+            </p>
+            <p className="mt-2">
+              Leaving the window again after the allowed limit will automatically submit your current answers and
+              lock this assessment.
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

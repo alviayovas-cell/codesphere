@@ -9,7 +9,8 @@ import { Badge } from '../../components/ui/Badge'
 import { InlineError } from '../../components/ui/ErrorState'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonCard } from '../../components/ui/Skeleton'
-import { ClockIcon } from '../../components/ui/Icons'
+import Modal from '../../components/ui/Modal'
+import { AlertIcon, ClockIcon } from '../../components/ui/Icons'
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -29,6 +30,7 @@ export default function Rounds() {
   const [rounds, setRounds] = useState<CodingRoundSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [startingId, setStartingId] = useState<string | null>(null)
+  const [pendingStart, setPendingStart] = useState<CodingRoundSummary | null>(null)
 
   const load = useCallback(() => {
     setError(null)
@@ -52,6 +54,7 @@ export default function Rounds() {
       setError(err instanceof ApiError ? err.message : 'Could not start the round.')
     } finally {
       setStartingId(null)
+      setPendingStart(null)
     }
   }
 
@@ -99,7 +102,7 @@ export default function Rounds() {
 
               <div className="mt-3">
                 {action === 'start' && (
-                  <Button variant="primary" size="sm" loading={startingId === round.id} onClick={() => handleStart(round.id)}>
+                  <Button variant="primary" size="sm" loading={startingId === round.id} onClick={() => setPendingStart(round)}>
                     Start Round
                   </Button>
                 )}
@@ -118,6 +121,43 @@ export default function Rounds() {
           )
         })}
       </div>
+
+      <Modal
+        open={pendingStart !== null}
+        onClose={() => (startingId ? undefined : setPendingStart(null))}
+        title="Before you start"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPendingStart(null)} disabled={startingId !== null}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={startingId === pendingStart?.id}
+              onClick={() => pendingStart && handleStart(pendingStart.id)}
+            >
+              Start Round
+            </Button>
+          </>
+        }
+      >
+        <div className="flex gap-3">
+          <AlertIcon className="h-5 w-5 shrink-0 text-amber-500" />
+          <div>
+            <p>
+              <span className="font-semibold text-zinc-900 dark:text-white">{pendingStart?.title}</span> is a timed,
+              monitored assessment. Once started, the {pendingStart?.durationMinutes}-minute timer cannot be paused
+              or restarted.
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-4">
+              <li>Switching tabs, minimizing the window, or losing focus is recorded as a violation.</li>
+              <li>Exceeding the allowed number of violations will automatically submit your answers and lock the round.</li>
+              <li>Your code is saved automatically as you work, so a brief disconnect won't lose your progress.</li>
+            </ul>
+            <p className="mt-2">Make sure you're ready and won't be interrupted before you continue.</p>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

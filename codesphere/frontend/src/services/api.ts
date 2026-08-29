@@ -1,5 +1,8 @@
 import type {
+  ActivityEventPublic,
+  ActivityEventType,
   AssessmentConfig,
+  AutosavePublic,
   CodingRoundAdminView,
   CodingRoundSummary,
   JobEnqueuedResponse,
@@ -13,6 +16,7 @@ import type {
   QuestionPoolConfig,
   ResultConfig,
   RoundSessionPublic,
+  SessionMonitorSummary,
   TestCaseAdminView,
   TestCaseVisibility,
   User,
@@ -430,4 +434,40 @@ export function updateRound(
 
 export function deleteRound(roundId: string): Promise<void> {
   return request<void>(`/admin/rounds/${roundId}`, { method: 'DELETE' })
+}
+
+// -- Autosave (student-facing, during an active round) -----------------------
+
+export function autosaveCode(roundId: string, problemId: string, code: string): Promise<void> {
+  return request<void>(`/rounds/${roundId}/autosave`, {
+    method: 'POST',
+    body: JSON.stringify({ problemId, code }),
+  })
+}
+
+export function getAutosave(roundId: string, problemId: string): Promise<AutosavePublic | null> {
+  return request<AutosavePublic | null>(`/rounds/${roundId}/autosave/${problemId}`)
+}
+
+// -- Assessment monitoring (student-facing: report visibility/focus events) --
+
+export function recordActivity(roundId: string, eventType: ActivityEventType): Promise<RoundSessionPublic> {
+  return request<RoundSessionPublic>(`/rounds/${roundId}/activity`, {
+    method: 'POST',
+    body: JSON.stringify({ eventType }),
+  })
+}
+
+// -- Assessment monitoring (admin) -------------------------------------------
+
+export function listRoundSessions(roundId: string): Promise<SessionMonitorSummary[]> {
+  return request<SessionMonitorSummary[]>(`/admin/rounds/${roundId}/sessions`)
+}
+
+export function getSessionActivity(sessionId: string): Promise<ActivityEventPublic[]> {
+  return request<ActivityEventPublic[]>(`/admin/sessions/${sessionId}/activity`)
+}
+
+export function unlockSession(sessionId: string): Promise<SessionMonitorSummary> {
+  return request<SessionMonitorSummary>(`/admin/sessions/${sessionId}/unlock`, { method: 'POST' })
 }

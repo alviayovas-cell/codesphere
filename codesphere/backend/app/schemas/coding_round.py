@@ -139,5 +139,6 @@ class RoundSessionPublic(BaseModel):
     remaining_seconds: int = Field(serialization_alias="remainingSeconds")
     assigned_questions: list[AssignedQuestionPublic] = Field(serialization_alias="assignedQuestions")
     violation_count: int = Field(serialization_alias="violationCount")
+    max_violations: int = Field(serialization_alias="maxViolations")
 
     model_config = {"populate_by_name": True}

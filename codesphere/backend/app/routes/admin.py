@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from redis import Redis
 
 from app.core.dependencies import (
+    get_activity_event_repository,
+    get_autosave_repository,
     get_coding_round_repository,
     get_current_admin_user,
     get_learning_module_repository,
@@ -11,6 +14,8 @@ from app.core.dependencies import (
     get_topic_progress_repository,
     get_user_repository,
 )
+from app.database.repositories.activity_event_repository import ActivityEventRepository
+from app.database.repositories.autosave_repository import AutosaveRepository
 from app.database.repositories.coding_round_repository import CodingRoundRepository
 from app.database.repositories.learning_repository import (
     LearningModuleRepository,
@@ -22,6 +27,7 @@ from app.database.repositories.round_session_repository import RoundSessionRepos
 from app.database.repositories.user_repository import UserRepository
 from app.models.common import UserRole
 from app.models.user import User
+from app.schemas.activity import ActivityEventPublic, SessionMonitorSummary
 from app.schemas.admin import PasswordResetResponse, StudentImportResult
 from app.schemas.auth import UserPublic, to_user_public
 from app.schemas.coding_round import CodingRoundAdminView, CodingRoundCreate, CodingRoundUpdate
@@ -45,7 +51,9 @@ from app.services.coding_round_service import (
     CodingRoundService,
     InvalidRoundConfigError,
     RoundNotFoundError,
+    SessionNotFoundError,
 )
+from app.workers.queue_config import get_redis_connection
 from app.services.learning_service import (
     LearningService,
     ModuleNotFoundError,
@@ -77,12 +85,28 @@ def _problem_service(
     return ProblemService(problem_repository, test_case_repository)
 
 
+def _redis() -> Redis:
+    return get_redis_connection()
+
+
 def _round_service(
     round_repository: CodingRoundRepository = Depends(get_coding_round_repository),
     session_repository: RoundSessionRepository = Depends(get_round_session_repository),
     problem_repository: ProblemRepository = Depends(get_problem_repository),
+    autosave_repository: AutosaveRepository = Depends(get_autosave_repository),
+    activity_event_repository: ActivityEventRepository = Depends(get_activity_event_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+    connection: Redis = Depends(_redis),
 ) -> CodingRoundService:
-    return CodingRoundService(round_repository, session_repository, problem_repository)
+    return CodingRoundService(
+        round_repository,
+        session_repository,
+        problem_repository,
+        autosave_repository,
+        activity_event_repository,
+        connection,
+        user_repository,
+    )
 
 
 def _to_round_admin_view(round_) -> CodingRoundAdminView:
@@ -422,3 +446,52 @@ async def delete_round(
         await service.delete_round(round_id)
     except RoundNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/rounds/{round_id}/sessions", response_model=list[SessionMonitorSummary])
+async def list_round_sessions(
+    round_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: CodingRoundService = Depends(_round_service),
+) -> list[SessionMonitorSummary]:
+    return await service.list_sessions_for_round(round_id)
+
+
+@router.get("/sessions/{session_id}/activity", response_model=list[ActivityEventPublic])
+async def get_session_activity(
+    session_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: CodingRoundService = Depends(_round_service),
+) -> list[ActivityEventPublic]:
+    events = await service.get_session_activity(session_id)
+    return [
+        ActivityEventPublic(
+            id=event.id, session_id=event.session_id, event_type=event.event_type,
+            timestamp=event.timestamp, metadata=event.metadata,
+        )
+        for event in events
+    ]
+
+
+@router.post("/sessions/{session_id}/unlock", response_model=SessionMonitorSummary)
+async def unlock_session(
+    session_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: CodingRoundService = Depends(_round_service),
+) -> SessionMonitorSummary:
+    try:
+        session = await service.admin_unlock_session(session_id)
+    except (SessionNotFoundError, RoundNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    student = await service.user_repository.find_by_id(session.student_id) if service.user_repository else None
+    return SessionMonitorSummary(
+        session_id=session.id,
+        student_id=session.student_id,
+        student_name=student.name if student else "Unknown student",
+        student_register_number=student.register_number if student else "-",
+        status=session.status,
+        violation_count=session.violation_count,
+        started_at=session.started_at,
+        expires_at=session.expires_at,
+    )

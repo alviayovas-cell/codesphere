@@ -7,11 +7,15 @@ from app.core.config import settings
 from app.core.dependencies import (
     enforce_run_rate_limit,
     enforce_submit_rate_limit,
+    get_activity_event_repository,
+    get_autosave_repository,
     get_coding_round_repository,
     get_current_user,
     get_problem_repository,
     get_round_session_repository,
 )
+from app.database.repositories.activity_event_repository import ActivityEventRepository
+from app.database.repositories.autosave_repository import AutosaveRepository
 from app.database.repositories.coding_round_repository import CodingRoundRepository
 from app.database.repositories.problem_repository import ProblemRepository
 from app.database.repositories.round_session_repository import RoundSessionRepository
@@ -69,13 +73,22 @@ async def submit_code(
     problem_repository: ProblemRepository = Depends(get_problem_repository),
     round_repository: CodingRoundRepository = Depends(get_coding_round_repository),
     session_repository: RoundSessionRepository = Depends(get_round_session_repository),
+    autosave_repository: AutosaveRepository = Depends(get_autosave_repository),
+    activity_event_repository: ActivityEventRepository = Depends(get_activity_event_repository),
     connection: Redis = Depends(_redis),
 ) -> JobEnqueuedResponse:
     if await problem_repository.find_by_id(payload.problem_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem not found")
 
     if payload.round_id is not None:
-        round_service = CodingRoundService(round_repository, session_repository, problem_repository)
+        round_service = CodingRoundService(
+            round_repository,
+            session_repository,
+            problem_repository,
+            autosave_repository,
+            activity_event_repository,
+            connection,
+        )
         try:
             await round_service.assert_can_submit(payload.round_id, current_user.id, payload.problem_id)
         except SessionNotFoundError as exc:

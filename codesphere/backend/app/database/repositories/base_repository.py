@@ -2,6 +2,7 @@ from typing import Any, Generic, TypeVar
 
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorDatabase
+from pymongo import ReturnDocument
 
 from app.models.common import MongoBaseModel
 
@@ -51,3 +52,14 @@ class BaseRepository(Generic[ModelType]):
 
     async def count(self, filter: dict[str, Any] | None = None) -> int:
         return await self.collection.count_documents(filter or {})
+
+    async def upsert_one(self, filter: dict[str, Any], update: dict[str, Any]) -> ModelType:
+        """Atomically create-or-replace-fields the single document matching
+        `filter` (e.g. one autosave per sessionId+problemId). MongoDB folds
+        `filter`'s simple equality fields into the document on insert, so
+        the result always has the full shape - no separate find-then-write
+        race condition."""
+        document = await self.collection.find_one_and_update(
+            filter, {"$set": update}, upsert=True, return_document=ReturnDocument.AFTER
+        )
+        return self.model(**document)

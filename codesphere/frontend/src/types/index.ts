@@ -209,4 +209,38 @@ export interface RoundSessionPublic {
   remainingSeconds: number
   assignedQuestions: AssignedQuestion[]
   violationCount: number
+  maxViolations: number
+}
+
+export interface AutosavePublic {
+  problemId: string
+  code: string
+  updatedAt: string
+}
+
+export type ActivityEventType =
+  | 'visibility_hidden'
+  | 'visibility_restored'
+  | 'window_blur'
+  | 'window_focus'
+  | 'warning'
+  | 'auto_submit'
+
+export interface ActivityEventPublic {
+  id: string
+  sessionId: string
+  eventType: ActivityEventType
+  timestamp: string
+  metadata: Record<string, unknown>
+}
+
+export interface SessionMonitorSummary {
+  sessionId: string
+  studentId: string
+  studentName: string
+  studentRegisterNumber: string
+  status: SessionStatus
+  violationCount: number
+  startedAt: string
+  expiresAt: string
 }

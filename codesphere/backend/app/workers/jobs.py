@@ -81,7 +81,13 @@ def _execute_case(judge: SyncJudgeService, code: str, test_case: dict) -> Execut
         return _unreachable_result()
 
 
-def submit_code_job(student_id: str, problem_id: str, code: str, round_id: str | None = None) -> dict:
+def submit_code_job(
+    student_id: str,
+    problem_id: str,
+    code: str,
+    round_id: str | None = None,
+    submission_type: str = SubmissionType.SUBMIT.value,
+) -> dict:
     """Submit Code: run every test case (public + hidden), score, and
     persist a Submission. Returns a dict matching the SubmitCodeResult
     schema.
@@ -90,7 +96,13 @@ def submit_code_job(student_id: str, problem_id: str, code: str, round_id: str |
     resultConfiguration.showResultsDuringRound controls whether the
     returned payload includes live verdict/score/test-case details or a
     redacted "submitted" placeholder - either way, the full graded result
-    is still stored on the Submission for later (Phase 11 Results)."""
+    is still stored on the Submission for later (Phase 11 Results).
+
+    submission_type distinguishes a student-initiated Submit from a
+    server-triggered auto-submit (time expiry or violation limit -
+    CodingRoundService enqueues this job with
+    submission_type=SubmissionType.AUTO_SUBMIT.value for those cases), so
+    the stored Submission record reflects which one actually happened."""
     db = _get_db()
     if not ObjectId.is_valid(problem_id):
         return {"error": "Problem not found"}
@@ -140,7 +152,7 @@ def submit_code_job(student_id: str, problem_id: str, code: str, round_id: str |
             "problemId": problem_id,
             "code": code,
             "language": "C",
-            "submissionType": SubmissionType.SUBMIT.value,
+            "submissionType": submission_type,
             "verdict": verdict.value,
             "score": score,
             "passedTests": passed,
