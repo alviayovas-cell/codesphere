@@ -1,7 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { ApiError } from '../services/api'
 import { useAuth } from '../context/AuthContext'
+import { ApiError } from '../services/api'
+import Button from '../components/ui/Button'
+import { Input } from '../components/ui/Field'
+import { InlineError } from '../components/ui/ErrorState'
+import { CodeIcon } from '../components/ui/Icons'
 
 export default function Login() {
   const { user, login, isLoading } = useAuth()
@@ -35,50 +39,68 @@ export default function Login() {
   }
 
   return (
-    <div className="mx-auto mt-16 max-w-sm px-4">
-      <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Login</h1>
-      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-        Use the credentials provided by your coding club admin.
-      </p>
-
-      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-          />
+    <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      {/* Hero panel - the one place a subtle gradient is used, per the design brief. */}
+      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-primary-700 via-primary-600 to-secondary-600 p-10 text-white lg:flex">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white/15 backdrop-blur">
+            <CodeIcon className="h-4 w-4" />
+          </span>
+          <span className="text-lg font-semibold">CodeSphere</span>
         </div>
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-          />
+          <h2 className="text-3xl font-semibold leading-tight">Learn. Practice. Compete.</h2>
+          <p className="mt-3 max-w-sm text-sm text-white/80">
+            A focused C programming platform for the CSE coding club — structured lessons, real problems, and timed
+            assessments in one place.
+          </p>
         </div>
+        <p className="text-xs text-white/60">CSE Coding Club</p>
+      </div>
 
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {/* Form panel */}
+      <div className="flex w-full flex-col justify-center px-6 py-12 sm:px-12 lg:w-1/2 lg:px-20">
+        <div className="mx-auto w-full max-w-sm">
+          <div className="mb-8 flex items-center gap-2 lg:hidden">
+            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white">
+              <CodeIcon className="h-4 w-4" />
+            </span>
+            <span className="text-lg font-semibold text-zinc-900 dark:text-white">CodeSphere</span>
+          </div>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-gray-900"
-        >
-          {submitting ? 'Logging in...' : 'Login'}
-        </button>
-      </form>
+          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white">Welcome back</h1>
+          <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+            Use the credentials provided by your coding club admin.
+          </p>
+
+          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
+            <Input
+              label="Email"
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <Input
+              label="Password"
+              id="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+
+            {error && <InlineError message={error} />}
+
+            <Button type="submit" variant="primary" loading={submitting} className="mt-2 w-full">
+              {submitting ? 'Logging in...' : 'Login'}
+            </Button>
+          </form>
+        </div>
+      </div>
     </div>
   )
 }

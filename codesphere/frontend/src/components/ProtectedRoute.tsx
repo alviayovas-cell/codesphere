@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import type { UserRole } from '../types'
+import { PageSpinner } from './ui/Spinner'
+import AppShell from './layout/AppShell'
 
 interface ProtectedRouteProps {
   children: ReactNode
@@ -12,7 +14,7 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
   const { user, isLoading } = useAuth()
 
   if (isLoading) {
-    return <div className="mx-auto mt-16 max-w-3xl px-4 text-gray-500 dark:text-gray-400">Loading...</div>
+    return <PageSpinner />
   }
 
   if (!user) {
@@ -28,5 +30,5 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
     return <Navigate to={fallback} replace />
   }
 
-  return <>{children}</>
+  return <AppShell>{children}</AppShell>
 }

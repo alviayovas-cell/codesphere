@@ -3,12 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import * as api from '../../services/api'
 import { ApiError } from '../../services/api'
 import type { CodingRoundSummary } from '../../types'
+import PageHeader from '../../components/layout/PageHeader'
+import Button from '../../components/ui/Button'
+import { Badge } from '../../components/ui/Badge'
+import { InlineError } from '../../components/ui/ErrorState'
+import EmptyState from '../../components/ui/EmptyState'
+import { SkeletonCard } from '../../components/ui/Skeleton'
+import { ClockIcon } from '../../components/ui/Icons'
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString()
+  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-function statusLabel(round: CodingRoundSummary): { text: string; action: 'start' | 'continue' | 'view' | 'wait' | 'over' } {
+function statusInfo(round: CodingRoundSummary): { text: string; action: 'start' | 'continue' | 'view' | 'wait' | 'over' } {
   if (round.studentStatus === 'active') return { text: 'In progress', action: 'continue' }
   if (round.studentStatus === 'submitted') return { text: 'Submitted', action: 'view' }
   if (round.studentStatus === 'expired' || round.studentStatus === 'locked') return { text: 'Time expired', action: 'view' }
@@ -24,6 +31,7 @@ export default function Rounds() {
   const [startingId, setStartingId] = useState<string | null>(null)
 
   const load = useCallback(() => {
+    setError(null)
     api
       .getRounds()
       .then(setRounds)
@@ -48,60 +56,62 @@ export default function Rounds() {
   }
 
   return (
-    <div className="mx-auto mt-16 max-w-3xl px-4">
-      <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Coding Rounds</h1>
-      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Timed assessments assigned by your coordinator.</p>
+    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+      <PageHeader title="Coding Rounds" description="Timed assessments assigned by your coordinator." />
 
-      {error && <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {rounds === null && !error && <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">Loading...</p>}
-      {rounds !== null && rounds.length === 0 && (
-        <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">No coding rounds are available right now.</p>
+      {error && <div className="mt-4"><InlineError message={error} /></div>}
+
+      {rounds === null && !error && (
+        <div className="mt-6 flex flex-col gap-3">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
       )}
 
-      <div className="mt-6 flex flex-col gap-4">
+      {rounds !== null && rounds.length === 0 && (
+        <div className="mt-6">
+          <EmptyState
+            icon={<ClockIcon className="h-6 w-6" />}
+            title="No coding rounds available right now."
+            action={
+              <Button variant="secondary" onClick={() => navigate('/student/problems')}>
+                Practice Problems
+              </Button>
+            }
+          />
+        </div>
+      )}
+
+      <div className="mt-6 flex flex-col gap-3">
         {rounds?.map((round) => {
-          const { text, action } = statusLabel(round)
+          const { text, action } = statusInfo(round)
           return (
-            <div key={round.id} className="rounded-md border border-gray-200 p-4 dark:border-gray-800">
-              <div className="flex items-baseline justify-between">
-                <h2 className="text-lg font-medium text-gray-900 dark:text-white">{round.title}</h2>
-                <span className="text-xs text-gray-500 dark:text-gray-400">{text}</span>
+            <div key={round.id} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">{round.title}</h2>
+                <Badge variant={action === 'continue' ? 'success' : action === 'wait' ? 'warning' : 'neutral'}>{text}</Badge>
               </div>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{round.description}</p>
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{round.description}</p>
+              <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
                 {round.questionCount} question{round.questionCount === 1 ? '' : 's'} &middot; {round.totalMarks} marks
-                &middot; {round.durationMinutes} min &middot; window {formatDate(round.startTime)} &ndash;{' '}
-                {formatDate(round.endTime)}
+                &middot; {round.durationMinutes} min &middot; window {formatDate(round.startTime)} &ndash; {formatDate(round.endTime)}
               </p>
 
               <div className="mt-3">
                 {action === 'start' && (
-                  <button
-                    type="button"
-                    onClick={() => handleStart(round.id)}
-                    disabled={startingId === round.id}
-                    className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-gray-900"
-                  >
-                    {startingId === round.id ? 'Starting...' : 'Start Round'}
-                  </button>
+                  <Button variant="primary" size="sm" loading={startingId === round.id} onClick={() => handleStart(round.id)}>
+                    Start Round
+                  </Button>
                 )}
                 {action === 'continue' && (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/student/rounds/${round.id}`)}
-                    className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-gray-900"
-                  >
+                  <Button variant="primary" size="sm" onClick={() => navigate(`/student/rounds/${round.id}`)}>
                     Continue
-                  </button>
+                  </Button>
                 )}
                 {action === 'view' && (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/student/rounds/${round.id}`)}
-                    className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 dark:border-gray-700 dark:text-gray-200"
-                  >
+                  <Button variant="secondary" size="sm" onClick={() => navigate(`/student/rounds/${round.id}`)}>
                     View
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>

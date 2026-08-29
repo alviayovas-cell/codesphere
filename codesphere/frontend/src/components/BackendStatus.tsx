@@ -12,12 +12,12 @@ export default function BackendStatus() {
       .catch(() => setStatus('offline'))
   }, [])
 
-  const color =
-    status === 'online' ? 'bg-green-500' : status === 'offline' ? 'bg-red-500' : 'bg-yellow-500'
+  const dot =
+    status === 'online' ? 'bg-green-500' : status === 'offline' ? 'bg-red-500' : 'bg-amber-500 animate-pulse'
 
   return (
-    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-      <span className={`inline-block h-2 w-2 rounded-full ${color}`} />
+    <div className="inline-flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-300">
+      <span className={`inline-block h-2 w-2 rounded-full ${dot}`} />
       Backend: {status}
     </div>
   )

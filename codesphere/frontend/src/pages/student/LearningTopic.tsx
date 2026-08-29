@@ -3,6 +3,10 @@ import { Link, useParams } from 'react-router-dom'
 import * as api from '../../services/api'
 import { ApiError } from '../../services/api'
 import type { LearningTopic } from '../../types'
+import Button from '../../components/ui/Button'
+import ErrorState from '../../components/ui/ErrorState'
+import { PageSpinner } from '../../components/ui/Spinner'
+import { ChevronLeftIcon } from '../../components/ui/Icons'
 
 function toEmbedUrl(url: string): string | null {
   const watchMatch = url.match(/[?&]v=([\w-]{6,})/)
@@ -20,6 +24,7 @@ export default function LearningTopicPage() {
 
   const load = useCallback(() => {
     if (!topicId) return
+    setError(null)
     api
       .getTopic(topicId)
       .then(setTopic)
@@ -49,57 +54,48 @@ export default function LearningTopicPage() {
 
   if (error) {
     return (
-      <div className="mx-auto mt-16 max-w-2xl px-4">
-        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-        <Link to="/student/learning" className="mt-4 inline-block text-sm underline">
+      <div className="mx-auto max-w-2xl px-4 py-6">
+        <ErrorState message={error} onRetry={load} />
+        <Link to="/student/learning" className="mt-4 inline-block text-sm text-zinc-500 underline dark:text-zinc-400">
           Back to modules
         </Link>
       </div>
     )
   }
 
-  if (!topic) {
-    return <div className="mx-auto mt-16 max-w-2xl px-4 text-sm text-gray-500 dark:text-gray-400">Loading...</div>
-  }
+  if (!topic) return <PageSpinner />
 
   const embedUrl = topic.videoUrl ? toEmbedUrl(topic.videoUrl) : null
 
   return (
-    <div className="mx-auto mt-16 max-w-2xl px-4">
-      <Link to="/student/learning" className="text-sm text-gray-500 underline dark:text-gray-400">
-        &larr; Back to modules
+    <div className="mx-auto max-w-2xl px-4 py-6">
+      <Link
+        to="/student/learning"
+        className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+      >
+        <ChevronLeftIcon className="h-4 w-4" /> Back to modules
       </Link>
 
-      <h1 className="mt-4 text-2xl font-semibold text-gray-900 dark:text-white">{topic.title}</h1>
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{topic.description}</p>
+      <h1 className="mt-4 text-2xl font-semibold text-zinc-900 dark:text-white">{topic.title}</h1>
+      <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{topic.description}</p>
 
       {topic.videoUrl && (
-        <div className="mt-4">
+        <div className="mt-5">
           {embedUrl ? (
-            <div className="aspect-video w-full overflow-hidden rounded-md">
-              <iframe
-                src={embedUrl}
-                title={topic.title}
-                className="h-full w-full"
-                allowFullScreen
-              />
+            <div className="aspect-video w-full overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+              <iframe src={embedUrl} title={topic.title} className="h-full w-full" allowFullScreen />
             </div>
           ) : (
-            <a href={topic.videoUrl} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline">
+            <a href={topic.videoUrl} target="_blank" rel="noreferrer" className="text-sm text-primary-600 underline dark:text-primary-400">
               Watch reference video
             </a>
           )}
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={toggleComplete}
-        disabled={updating}
-        className="mt-6 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-gray-900"
-      >
+      <Button variant={topic.completed ? 'secondary' : 'primary'} loading={updating} onClick={toggleComplete} className="mt-6">
         {topic.completed ? 'Mark as Incomplete' : 'Mark as Complete'}
-      </button>
+      </Button>
     </div>
   )
 }
