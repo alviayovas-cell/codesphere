@@ -5,6 +5,8 @@ import type {
   ProblemPublic,
   ProblemSummary,
   ProgressSummary,
+  RunCodeResult,
+  SubmitCodeResult,
   TestCaseAdminView,
   TestCaseVisibility,
   User,
@@ -296,4 +298,20 @@ export function createTestCase(problemId: string, payload: TestCaseInput): Promi
 
 export function deleteTestCase(testCaseId: string): Promise<void> {
   return request<void>(`/admin/test-cases/${testCaseId}`, { method: 'DELETE' })
+}
+
+// -- Code execution -----------------------------------------------------------
+
+export function runCode(problemId: string, code: string, stdin: string): Promise<RunCodeResult> {
+  return request<RunCodeResult>('/code/run', {
+    method: 'POST',
+    body: JSON.stringify({ problemId, code, stdin }),
+  })
+}
+
+export function submitCode(problemId: string, code: string): Promise<SubmitCodeResult> {
+  return request<SubmitCodeResult>('/code/submit', {
+    method: 'POST',
+    body: JSON.stringify({ problemId, code }),
+  })
 }

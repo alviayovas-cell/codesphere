@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.database.mongodb import close_mongo_connection, connect_to_mongo
-from app.routes import admin, auth, health, learning, problems
+from app.routes import admin, auth, code_execution, health, learning, problems
 
 
 @asynccontextmanager
@@ -30,6 +30,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(learning.router, prefix="/api")
 app.include_router(problems.router, prefix="/api")
+app.include_router(code_execution.router, prefix="/api")
 
 
 @app.get("/")

@@ -3,6 +3,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.core.config import settings
+from app.core.rate_limit import InMemoryRateLimiter
 from app.core.security import decode_access_token
 from app.database.mongodb import get_database
 from app.database.repositories import (
@@ -20,6 +22,7 @@ from app.database.repositories import (
 )
 from app.models.common import UserRole
 from app.models.user import User
+from app.services.judge_service import JudgeService
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -72,6 +75,10 @@ def get_topic_progress_repository() -> TopicProgressRepository:
     return TopicProgressRepository(get_db())
 
 
+def get_judge_service() -> JudgeService:
+    return JudgeService()
+
+
 _UNAUTHORIZED = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
     detail="Could not validate credentials",
@@ -106,3 +113,15 @@ async def get_current_admin_user(current_user: User = Depends(get_current_user))
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return current_user
+
+
+_run_rate_limiter = InMemoryRateLimiter(settings.run_rate_limit_per_minute, 60)
+_submit_rate_limiter = InMemoryRateLimiter(settings.submit_rate_limit_per_minute, 60)
+
+
+def enforce_run_rate_limit(current_user: User = Depends(get_current_user)) -> None:
+    _run_rate_limiter.check(current_user.id)
+
+
+def enforce_submit_rate_limit(current_user: User = Depends(get_current_user)) -> None:
+    _submit_rate_limiter.check(current_user.id)

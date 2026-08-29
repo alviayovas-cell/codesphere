@@ -95,3 +95,37 @@ export interface TestCaseAdminView {
 export interface ProblemAdminView extends ProblemPublic {
   testCases: TestCaseAdminView[]
 }
+
+export type Verdict =
+  | 'pending'
+  | 'accepted'
+  | 'wrong_answer'
+  | 'compilation_error'
+  | 'runtime_error'
+  | 'time_limit_exceeded'
+  | 'internal_error'
+
+export interface RunCodeResult {
+  verdict: Verdict
+  stdout: string
+  stderr: string
+  compileOutput: string
+  statusDescription: string
+  timeSeconds: number | null
+  memoryKb: number | null
+}
+
+export interface TestCaseResult {
+  index: number
+  verdict: Verdict
+}
+
+export interface SubmitCodeResult {
+  submissionId: string
+  verdict: Verdict
+  score: number
+  passedTests: number
+  totalTests: number
+  testCaseResults: TestCaseResult[]
+  compileOutput: string
+}

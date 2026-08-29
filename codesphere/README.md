@@ -20,6 +20,7 @@ codesphere/
 **Phase 3: JWT Authentication** — complete.
 **Phase 4: Learning Dashboard** — complete.
 **Phase 5: Coding Problem Bank** — complete.
+**Phase 6: Monaco Editor and Judge0** — complete.
 
 Implemented so far:
 - Frontend scaffold (React + TypeScript + Vite + Tailwind CSS + React Router) with placeholder pages.
@@ -41,9 +42,14 @@ Implemented so far:
 - Frontend: student dashboard now shows a real progress bar, a "Continue Learning" card pointing at the next incomplete topic, and a link into the full module/topic browser (`/student/learning`, `/student/learning/topics/:id`, with a mark-complete checkbox/button and embedded video where the URL is a recognizable YouTube link). Admin gets a `/admin/learning` page to create/delete modules and topics.
 - Coding problem bank: `GET /api/problems` (summary list) and `GET /api/problems/{id}` (full statement + **public test cases only**) for students. Admin gets full CRUD — `POST`/`GET`/`PUT`/`DELETE /api/admin/problems/{id}` and `POST /api/admin/problems/{id}/test-cases`, `PUT`/`DELETE /api/admin/test-cases/{id}` — with the admin view showing every test case (public and hidden) and its visibility. Hidden test cases are never included in any student-facing response, even structurally (`ProblemPublic` has no field that could carry one).
 - `backend/scripts/seed_problems.py` — idempotently creates the 10 named Data Structures problems (DS01-DS10) from spec section 8, each with 2 public and 5 hidden test cases, real problem statements, and verified-correct expected outputs (see Known Limitations below for how these were verified).
-- Frontend: `/student/problems` (sortable table of problems) and `/student/problems/:id` (full statement, examples, public test cases — no code editor yet, that's Phase 6). Admin gets `/admin/problems` (list/create/delete) and `/admin/problems/:id` (add/remove test cases, tagged public/hidden).
+- Frontend: `/student/problems` (sortable table of problems). Admin gets `/admin/problems` (list/create/delete) and `/admin/problems/:id` (add/remove test cases, tagged public/hidden).
+- Judge0 integration (`app/services/judge_service.py`): the backend never executes student code itself — every run goes to a configured Judge0 instance over HTTP (base64-encoded payloads, `wait=true`), with retries on transient network failures. Defaults to the free public **Judge0 CE demo instance** (`ce.judge0.com`) so the app works out of the box, but that instance is rate-limited and explicitly **not** meant for a real coding event — point `JUDGE0_API_URL` (and `JUDGE0_API_KEY`/`JUDGE0_API_HOST` if using RapidAPI) at your own instance before one.
+- `POST /api/code/run` — executes code against student-editable stdin, returns raw stdout/stderr/compile output/verdict/time/memory. No test-case grading, nothing persisted.
+- `POST /api/code/submit` — executes code against **every** test case (public + hidden) for the problem, in parallel (with a compile-error short-circuit so a broken build doesn't get recompiled N times), scores it (full marks if every case passes, else 0), and persists a `Submission` record (`submissionType: "submit"`, `roundId: null` for this practice-mode flow). Returns overall verdict/score/passed-total plus a per-test-case pass/fail list — matching spec section 19's Practice Mode result visibility — without ever exposing hidden test case content.
+- Rate limiting per spec section 11: 5 Run Code and 3 Submit Code requests per minute per student, enforced by an in-memory sliding-window limiter (`app/core/rate_limit.py`) returning `429` with a `Retry-After` header.
+- Frontend: `/student/problems/:id` is now the full coding interface — problem statement on the left, a Monaco editor (C syntax, default template) with an editable Input box and Run/Submit buttons on the right, and an output panel showing verdict, stdout/stderr/compile errors, time/memory, or (for Submit) score and a per-test-case pass/fail list. Code drafts persist per-problem in `localStorage` across navigations.
 
-Everything else described in the project specification (Judge0 execution, coding rounds, etc.) is **not yet implemented** and will be added in later phases.
+Everything else described in the project specification (Redis/queue, coding rounds, etc.) is **not yet implemented** and will be added in later phases.
 
 ## Prerequisites
 
@@ -67,6 +73,8 @@ uvicorn app.main:app --reload --port 8000
 Backend will be available at `http://localhost:8000`, with a health check at `http://localhost:8000/api/health`.
 
 By default `MONGODB_URI` in `.env` points at `mongodb://localhost:27017`. If you don't have MongoDB running locally, edit `backend/.env` and set `MONGODB_URI` to a MongoDB Atlas connection string instead. The API still starts even if the database is unreachable — `/api/health/db` will just report `"unavailable"` until it can connect.
+
+By default `JUDGE0_API_URL` in `.env` points at the free public Judge0 CE demo instance (`https://ce.judge0.com`), so Run/Submit work immediately with no setup. That instance is shared, rate-limited, and not meant for a real coding event — before one, set `JUDGE0_API_URL` to your own self-hosted or RapidAPI-hosted Judge0 instance (and `JUDGE0_API_KEY`/`JUDGE0_API_HOST` if using RapidAPI).
 
 ### Frontend
 
@@ -196,3 +204,26 @@ This creates the 10 named DS01-DS10 problems from the spec, each with 2 public a
 - No code editor or Run/Submit yet — problem pages are read-only (statement + public test cases). That's Phase 6 (Monaco Editor and Judge0).
 - The admin "New Problem" form doesn't yet support entering examples inline (the backend accepts them via `examples` in the request body) — add them via `/docs` or a REST client for now, or extend the form later.
 - `ProblemUpdate`'s `examples` field, if provided, replaces the entire examples list rather than patching individual entries — fine for admin-driven content edits, just not a granular per-example API.
+
+## Testing Phase 6
+
+1. Start both backend and frontend with the default `.env` (uses the free Judge0 CE demo instance — no setup needed).
+2. Log in as a student, open any problem (e.g. "DS01 - Reverse an Array") — you should see the statement on the left and a dark Monaco editor with a default `#include <stdio.h>` C template on the right, plus an Input box pre-filled with the problem's first public test case.
+3. Write a correct solution, click **Run Code** — within a few seconds you should see a green "Accepted" status with the program's actual output. Edit the Input box to something else and Run again to confirm it re-executes with your custom input.
+4. Click **Submit Code** — you should see an overall verdict, a score, "Passed X/Y test cases", and a numbered pass/fail list for every test case (including the 5 hidden ones) — but never their actual input/expected content.
+5. Write deliberately broken code (e.g. delete a `;`) and Run — you should see a red "Compilation Error" with the compiler's actual error text.
+6. Click Run 6 times within a minute — the 6th should show a rate-limit error. Click Submit 4 times within a minute — the 4th should show a rate-limit error.
+7. Check `GET /api/results` doesn't exist yet — Submit's result is only shown inline right after submitting; a dedicated results/history page is Phase 11.
+
+## Known Limitations (Phase 6)
+
+- **No MongoDB server was available in this environment** (same as prior phases) — the DB layer was exercised via the in-memory Mongo mock, as in earlier phases. **Unlike** earlier phases, though, Judge0 itself was **not** mocked: every check below made a real network call to the live public Judge0 CE demo instance (`ce.judge0.com`).
+  - `JudgeService` was verified against real Judge0 for all 5 verdict types it needs to distinguish — Accepted (both with and without `expected_output`), Wrong Answer, Compilation Error, Runtime Error (segfault), and Time Limit Exceeded (infinite loop) — 8/8 checks passed.
+  - The full `SubmissionService` orchestration (Run with custom stdin, Submit running all test cases in parallel, the compile-error short-circuit, all-or-nothing scoring, and `Submission` persistence) was verified end-to-end against real Judge0 with a correct solution, a subtly wrong one, and a broken one — 18/18 checks passed, and along the way caught that a "wrong" test fixture I wrote actually passed one edge case legitimately (a 1-element array reversed equals itself) rather than being a bug.
+  - The rate limiter was unit-tested in isolation (9/9 checks) and then re-verified through the real running HTTP server (12/12 checks, including an actual `429` after 5 Run / 3 Submit calls in a minute).
+  - **Not** verified against a real MongoDB Atlas cluster or through an actual browser session (no browser automation available here) — please click through the steps above yourself.
+- **Judge0 CE demo instance caveats**: `ce.judge0.com` is public, shared, and rate-limited by Judge0 itself (separately from CodeSphere's own per-student limits) — expect occasional slowness or failures under heavy use, and switch to your own instance before a real event, as the TTD requires.
+- Rate limiting is in-memory and per-process (see `app/core/rate_limit.py` docstring) — correct for a single Uvicorn worker, but won't coordinate across multiple workers or machines. Phase 7's Redis introduction is the natural place to make this distributed.
+- All-or-nothing scoring: a submission gets full marks only if every test case (public and hidden) passes, otherwise 0 — the spec doesn't define partial credit, so this was the simplest defensible interpretation. Straightforward to change later if partial credit is wanted.
+- No results/history page yet (`GET /api/results` is Phase 11) — a Submit's outcome is only shown inline on the page where you submitted it, though every submission is persisted to MongoDB already.
+- The Monaco editor always uses the `vs-dark` theme regardless of the site's light/dark mode — a minor cosmetic inconsistency, not a functional issue.
