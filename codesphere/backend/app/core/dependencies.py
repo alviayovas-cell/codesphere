@@ -15,6 +15,7 @@ from app.database.repositories import (
     RoundSessionRepository,
     SubmissionRepository,
     TestCaseRepository,
+    TopicProgressRepository,
     UserRepository,
 )
 from app.models.common import UserRole
@@ -65,6 +66,10 @@ def get_autosave_repository() -> AutosaveRepository:
 
 def get_activity_event_repository() -> ActivityEventRepository:
     return ActivityEventRepository(get_db())
+
+
+def get_topic_progress_repository() -> TopicProgressRepository:
+    return TopicProgressRepository(get_db())
 
 
 _UNAUTHORIZED = HTTPException(

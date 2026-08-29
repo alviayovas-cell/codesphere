@@ -18,6 +18,7 @@ codesphere/
 **Phase 1: Project Setup and Architecture** — complete.
 **Phase 2: MongoDB Database and Core Models** — complete.
 **Phase 3: JWT Authentication** — complete.
+**Phase 4: Learning Dashboard** — complete.
 
 Implemented so far:
 - Frontend scaffold (React + TypeScript + Vite + Tailwind CSS + React Router) with placeholder pages.
@@ -32,8 +33,13 @@ Implemented so far:
 - Admin-controlled student provisioning: no public registration. `POST /api/admin/students/import` (CSV upload), `GET /api/admin/students`, `POST /api/admin/students/{id}/reset-password` — all admin-only.
 - `backend/scripts/create_admin.py` — one-off script to create the very first admin account (there is no UI/API for this by design).
 - Frontend: real login form, an `AuthContext` that stores the JWT and current user, `ProtectedRoute`/`RequireAuth` route guards, a change-password page, and a forced redirect to change-password when `mustChangePassword` is true.
+- Learning content: `GET /api/learning/modules` (with per-topic and per-module completion for the logged-in student), `GET /api/learning/topics/{id}`, `POST`/`DELETE /api/learning/topics/{id}/complete` to mark/unmark progress, `GET /api/learning/progress` for an overall + per-module summary. All require login (any role).
+- Admin learning management: `POST`/`PUT`/`DELETE` on `/api/admin/learning/modules` and `/api/admin/learning/topics` (admin-only). Deleting a module cascades to its topics and any progress records; deleting a topic cascades its progress records.
+- A `topic_progress` collection (student × topic completion) — not one of the collections explicitly listed in the design doc's DB design table, but required to persist "mark topic as completed" / progress tracking, which the spec calls for explicitly (section 6).
+- `backend/scripts/seed_learning_content.py` — idempotently creates the 10 named C Programming modules from spec section 6, each with one topic and a verified real YouTube reference (freeCodeCamp's full "C Programming Tutorial for Beginners" course, used as a general starting resource — see the script's docstring for why per-topic links weren't fabricated, and refine them via the admin UI).
+- Frontend: student dashboard now shows a real progress bar, a "Continue Learning" card pointing at the next incomplete topic, and a link into the full module/topic browser (`/student/learning`, `/student/learning/topics/:id`, with a mark-complete checkbox/button and embedded video where the URL is a recognizable YouTube link). Admin gets a `/admin/learning` page to create/delete modules and topics.
 
-Everything else described in the project specification (learning content, problem bank, Judge0 execution, coding rounds, etc.) is **not yet implemented** and will be added in later phases.
+Everything else described in the project specification (problem bank, Judge0 execution, coding rounds, etc.) is **not yet implemented** and will be added in later phases.
 
 ## Prerequisites
 
@@ -79,6 +85,17 @@ python scripts/create_admin.py --name "Admin" --email admin@example.com --passwo
 ```
 
 Log in with those credentials, then use the admin dashboard's student CSV import / password reset APIs to provision students from there.
+
+### Seeding the C Programming learning content
+
+With a reachable MongoDB configured, run:
+
+```
+cd backend
+python scripts/seed_learning_content.py
+```
+
+This creates the 10 named modules from the spec (Introduction to C, Variables and Data Types, ... Basic Data Structures), each with one topic. It's safe to re-run — it skips any module that already exists by title.
 
 ## Testing Phase 1
 
@@ -130,3 +147,21 @@ Log in with those credentials, then use the admin dashboard's student CSV import
 - No rate limiting on `/api/auth/login` yet (rate limiting is explicitly scoped to Judge0 Run/Submit in Phase 6 of the spec) — fine for a club-scale deployment but worth knowing before wider exposure.
 - Only one role escalation path exists: the bootstrap script. There's no admin UI yet to promote a student to admin or create additional admins through the app itself.
 - JWTs are stored in `localStorage`, matching the spec's "Authorization Bearer token" design; if you tighten this later (e.g. httpOnly cookies) note that access-token expiry is 12 hours by default (`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`) — long enough to survive a coding round without matching Phase 8's server-side session timing yet.
+
+## Testing Phase 4
+
+1. Seed the learning content (see above), then start both backend and frontend.
+2. Log in as a student and visit `/student/dashboard` — you should see a progress bar (0%), a "Continue Learning" card pointing at the first module's topic, and a "Browse all C Programming modules" link.
+3. Visit `/student/learning`, check a topic's checkbox to mark it complete, refresh the page, and confirm it's still checked and the module's `X/Y complete` count updated.
+4. Click into a topic (`/student/learning/topics/:id`) — you should see its description, an embedded video player (the seeded video is a real, playable freeCodeCamp course), and a "Mark as Complete"/"Mark as Incomplete" toggle button.
+5. Go back to the dashboard — "Continue Learning" should now point at the next incomplete topic.
+6. Log in as admin, visit `/admin/learning`, create a new module and a topic under it, then delete the topic and the module — confirm both disappear.
+7. As a student, try `POST /api/admin/learning/modules` directly (e.g. via `/docs`) with a student token — should return `403`.
+
+## Known Limitations (Phase 4)
+
+- **No MongoDB server was available in this environment** (same as prior phases). The learning service/repository code (module & topic CRUD, cascade deletes, per-student progress isolation, idempotent complete/uncomplete) was verified with 26 checks against an in-memory Mongo mock (`mongomock-motor`, dev-only), and separately end-to-end through the real HTTP API (login → list modules → mark complete → progress summary → admin create/delete with cascade → role-based 403) using the same mock. It was **not** exercised against a real MongoDB Atlas cluster or through an actual browser session — please verify against yours using the steps above.
+- The seeded YouTube link is one verified, real, general C-programming course video reused across all 10 topics (see the seed script's docstring) — it is not a hand-verified link *specific* to each individual topic. Replace per-topic links with ones you trust via `/admin/learning` or the admin API.
+- "Upcoming Coding Rounds" and "Recent Activity" on the student dashboard are placeholders — coding rounds don't exist until Phase 8, and there's no activity-log endpoint yet (only aggregate progress).
+- The admin Learning Management page supports create/delete for modules and topics, but not inline editing yet (the backend `PUT` endpoints exist and are tested — only the UI form for editing is missing). Editing is possible today via `/docs` or a REST client.
+- No drag-and-drop or bulk reordering UI — module/topic `order` is set manually via the numeric field when creating.

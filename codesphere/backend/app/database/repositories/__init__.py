@@ -7,6 +7,7 @@ from app.database.repositories.learning_repository import (
     LearningTopicRepository,
 )
 from app.database.repositories.problem_repository import ProblemRepository, TestCaseRepository
+from app.database.repositories.progress_repository import TopicProgressRepository
 from app.database.repositories.round_session_repository import RoundSessionRepository
 from app.database.repositories.submission_repository import SubmissionRepository
 from app.database.repositories.user_repository import UserRepository
@@ -20,6 +21,7 @@ __all__ = [
     "LearningTopicRepository",
     "ProblemRepository",
     "TestCaseRepository",
+    "TopicProgressRepository",
     "RoundSessionRepository",
     "SubmissionRepository",
     "UserRepository",

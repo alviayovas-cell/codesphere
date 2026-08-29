@@ -19,6 +19,7 @@ from app.models.common import (
 )
 from app.models.learning import LearningModule, LearningTopic
 from app.models.problem import Problem, ProblemExample, TestCase
+from app.models.progress import TopicProgress
 from app.models.round_session import RoundSession
 from app.models.submission import Submission
 from app.models.user import User
@@ -44,6 +45,7 @@ __all__ = [
     "Problem",
     "ProblemExample",
     "TestCase",
+    "TopicProgress",
     "RoundSession",
     "Submission",
     "User",

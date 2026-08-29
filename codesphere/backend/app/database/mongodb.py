@@ -19,6 +19,7 @@ class Collections:
     SUBMISSIONS = "submissions"
     AUTOSAVES = "autosaves"
     ACTIVITY_EVENTS = "activity_events"
+    TOPIC_PROGRESS = "topic_progress"
 
 
 class MongoDB:
@@ -68,7 +69,9 @@ async def create_indexes() -> None:
     await db[Collections.USERS].create_index("email", unique=True)
     await db[Collections.USERS].create_index("registerNumber", unique=True)
 
+    await db[Collections.LEARNING_MODULES].create_index("order")
     await db[Collections.LEARNING_TOPICS].create_index("moduleId")
+    await db[Collections.LEARNING_TOPICS].create_index([("moduleId", ASCENDING), ("order", ASCENDING)])
 
     await db[Collections.PROBLEMS].create_index("slug", unique=True)
 
@@ -91,5 +94,10 @@ async def create_indexes() -> None:
 
     await db[Collections.ACTIVITY_EVENTS].create_index("sessionId")
     await db[Collections.ACTIVITY_EVENTS].create_index("timestamp")
+
+    await db[Collections.TOPIC_PROGRESS].create_index(
+        [("studentId", ASCENDING), ("topicId", ASCENDING)], unique=True
+    )
+    await db[Collections.TOPIC_PROGRESS].create_index("studentId")
 
     logger.info("MongoDB indexes ensured")

@@ -1,4 +1,4 @@
-import type { User } from '../types'
+import type { LearningModule, LearningTopic, ProgressSummary, User } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
 
@@ -132,4 +132,84 @@ export function resetStudentPassword(studentId: string): Promise<{ temporaryPass
   return request<{ temporaryPassword: string }>(`/admin/students/${studentId}/reset-password`, {
     method: 'POST',
   })
+}
+
+// -- Learning (student-facing) ----------------------------------------------
+
+export function getModules(): Promise<LearningModule[]> {
+  return request<LearningModule[]>('/learning/modules')
+}
+
+export function getTopic(topicId: string): Promise<LearningTopic> {
+  return request<LearningTopic>(`/learning/topics/${topicId}`)
+}
+
+export function markTopicComplete(topicId: string): Promise<void> {
+  return request<void>(`/learning/topics/${topicId}/complete`, { method: 'POST' })
+}
+
+export function unmarkTopicComplete(topicId: string): Promise<void> {
+  return request<void>(`/learning/topics/${topicId}/complete`, { method: 'DELETE' })
+}
+
+export function getProgress(): Promise<ProgressSummary> {
+  return request<ProgressSummary>('/learning/progress')
+}
+
+// -- Learning (admin management) ---------------------------------------------
+
+export interface LearningModuleInput {
+  title: string
+  description: string
+  order: number
+  language?: string
+}
+
+export function createModule(payload: LearningModuleInput): Promise<LearningModule> {
+  return request<LearningModule>('/admin/learning/modules', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateModule(
+  moduleId: string,
+  payload: Partial<LearningModuleInput>,
+): Promise<LearningModule> {
+  return request<LearningModule>(`/admin/learning/modules/${moduleId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteModule(moduleId: string): Promise<void> {
+  return request<void>(`/admin/learning/modules/${moduleId}`, { method: 'DELETE' })
+}
+
+export interface LearningTopicInput {
+  title: string
+  description: string
+  videoUrl?: string | null
+  order: number
+}
+
+export function createTopic(moduleId: string, payload: LearningTopicInput): Promise<LearningTopic> {
+  return request<LearningTopic>(`/admin/learning/modules/${moduleId}/topics`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateTopic(
+  topicId: string,
+  payload: Partial<LearningTopicInput>,
+): Promise<LearningTopic> {
+  return request<LearningTopic>(`/admin/learning/topics/${topicId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteTopic(topicId: string): Promise<void> {
+  return request<void>(`/admin/learning/topics/${topicId}`, { method: 'DELETE' })
 }
