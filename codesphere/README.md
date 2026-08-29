@@ -17,6 +17,7 @@ codesphere/
 
 **Phase 1: Project Setup and Architecture** — complete.
 **Phase 2: MongoDB Database and Core Models** — complete.
+**Phase 3: JWT Authentication** — complete.
 
 Implemented so far:
 - Frontend scaffold (React + TypeScript + Vite + Tailwind CSS + React Router) with placeholder pages.
@@ -26,8 +27,13 @@ Implemented so far:
 - A generic `BaseRepository` plus one repository per collection for CRUD access, wired up via FastAPI dependency functions in `app/core/dependencies.py`.
 - Indexes created automatically on startup (unique email/registerNumber/slug, lookup indexes on foreign keys, etc.).
 - `/api/health/db` endpoint to check live database connectivity.
+- JWT authentication: `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/change-password`. Passwords are hashed with bcrypt; tokens carry the user id and role and expire after `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`. Protected routes always resolve the current user from the validated token, never from client-supplied IDs.
+- Role-based route protection (`get_current_user` / `get_current_admin_user` FastAPI dependencies).
+- Admin-controlled student provisioning: no public registration. `POST /api/admin/students/import` (CSV upload), `GET /api/admin/students`, `POST /api/admin/students/{id}/reset-password` — all admin-only.
+- `backend/scripts/create_admin.py` — one-off script to create the very first admin account (there is no UI/API for this by design).
+- Frontend: real login form, an `AuthContext` that stores the JWT and current user, `ProtectedRoute`/`RequireAuth` route guards, a change-password page, and a forced redirect to change-password when `mustChangePassword` is true.
 
-Everything else described in the project specification (auth, learning content, problem bank, Judge0 execution, coding rounds, etc.) is **not yet implemented** and will be added in later phases.
+Everything else described in the project specification (learning content, problem bank, Judge0 execution, coding rounds, etc.) is **not yet implemented** and will be added in later phases.
 
 ## Prerequisites
 
@@ -63,6 +69,17 @@ npm run dev
 
 Frontend will be available at `http://localhost:5173`.
 
+### Creating the first admin account
+
+There is no public registration and no API for creating the first admin (by design — see spec section 4). Create it directly with the bootstrap script, with the backend's venv activated and a reachable MongoDB configured in `backend/.env`:
+
+```
+cd backend
+python scripts/create_admin.py --name "Admin" --email admin@example.com --password "ChangeMe123!" --register-number ADMIN001
+```
+
+Log in with those credentials, then use the admin dashboard's student CSV import / password reset APIs to provision students from there.
+
 ## Testing Phase 1
 
 1. Start the backend, then visit `http://localhost:8000/api/health` — expect `{"status": "ok", "service": "codesphere-api"}`.
@@ -88,7 +105,28 @@ Frontend will be available at `http://localhost:5173`.
 
 ## Known Limitations (Phase 2)
 
-- No authentication yet — all pages/APIs are public placeholders (Phase 3).
-- No CRUD API routes yet for any collection — only the repository layer exists; routes are added phase-by-phase as each feature is built (learning in Phase 4, problems in Phase 5, etc.).
+- No CRUD API routes yet for content collections (learning, problems, coding rounds, etc.) — only the repository layer exists; routes are added phase-by-phase as each feature is built (learning in Phase 4, problems in Phase 5, etc.).
 - No seed data yet — collections are empty until Phase 5 (problem bank) and later phases populate them.
-- Repository CRUD (insert/find/update/delete) and index creation were validated with an offline model round-trip check, not against a live MongoDB instance, since no MongoDB server was available in the development environment. Verify against your own MongoDB instance using the steps above before relying on it.
+
+## Testing Phase 3
+
+1. Create the first admin account with `scripts/create_admin.py` (see above), then start both backend and frontend.
+2. Visit `http://localhost:5173/login` and log in as the admin. You should land on `/admin/dashboard` showing "Welcome, &lt;name&gt;".
+3. Click "Change Password", submit a new one, and confirm you're redirected back to the dashboard and can log in again with the new password.
+4. Log out, then try visiting `http://localhost:5173/admin/dashboard` directly while logged out — you should be redirected to `/login`.
+5. From a REST client (or `/docs`), import students via `POST /api/admin/students/import` with a CSV like:
+   ```
+   Name,RegisterNumber,Email,Class
+   Student One,S001,student1@example.com,CSE-A
+   ```
+   using the admin's bearer token. The response includes each created student's `temporaryPassword` — log in as that student and confirm you're forced to `/change-password` (`mustChangePassword` is `true` until they change it).
+6. Try logging in with a wrong password, or calling `GET /api/auth/me` with no/invalid token — both should return `401`.
+7. Try calling `GET /api/admin/students` with a **student** token — should return `403`.
+
+## Known Limitations (Phase 3)
+
+- Backend auth/CSV-import/password-reset logic was verified with an in-memory MongoDB mock (`mongomock-motor`, dev-only, not a project dependency) driving the real service and repository code — 20 checks covering login, wrong/unknown credentials, token validation, password change, CSV import (including duplicate/missing-field handling), and admin password reset all passed. It was **not** exercised against a real MongoDB Atlas cluster, since none was available in this environment — please verify against yours.
+- The actual browser UI (login form, redirects, change-password flow) was verified via the real HTTP API (login, CORS preflight including the `Authorization` header, protected-route rejections) and a TypeScript build, but not through an actual browser session, since no browser automation is available in this environment. Please click through the flow yourself using the steps above.
+- No rate limiting on `/api/auth/login` yet (rate limiting is explicitly scoped to Judge0 Run/Submit in Phase 6 of the spec) — fine for a club-scale deployment but worth knowing before wider exposure.
+- Only one role escalation path exists: the bootstrap script. There's no admin UI yet to promote a student to admin or create additional admins through the app itself.
+- JWTs are stored in `localStorage`, matching the spec's "Authorization Bearer token" design; if you tighten this later (e.g. httpOnly cookies) note that access-token expiry is 12 hours by default (`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`) — long enough to survive a coding round without matching Phase 8's server-side session timing yet.

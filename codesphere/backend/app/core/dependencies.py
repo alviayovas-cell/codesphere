@@ -1,5 +1,9 @@
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import InvalidTokenError
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.core.security import decode_access_token
 from app.database.mongodb import get_database
 from app.database.repositories import (
     ActivityEventRepository,
@@ -13,6 +17,10 @@ from app.database.repositories import (
     TestCaseRepository,
     UserRepository,
 )
+from app.models.common import UserRole
+from app.models.user import User
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_db() -> AsyncIOMotorDatabase:
@@ -57,3 +65,39 @@ def get_autosave_repository() -> AutosaveRepository:
 
 def get_activity_event_repository() -> ActivityEventRepository:
     return ActivityEventRepository(get_db())
+
+
+_UNAUTHORIZED = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Could not validate credentials",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> User:
+    if credentials is None:
+        raise _UNAUTHORIZED
+
+    try:
+        payload = decode_access_token(credentials.credentials)
+    except InvalidTokenError as exc:
+        raise _UNAUTHORIZED from exc
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise _UNAUTHORIZED
+
+    user = await user_repository.find_by_id(user_id)
+    if user is None:
+        raise _UNAUTHORIZED
+
+    return user
+
+
+async def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
