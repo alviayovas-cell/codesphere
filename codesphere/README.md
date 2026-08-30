@@ -27,6 +27,7 @@ codesphere/
 **Phase 10: Autosave and Assessment Monitoring** — complete.
 **Phase 11: Results and Leaderboard** — complete.
 **Phase 12: Admin Analytics** — complete.
+**Phase 13: Security Review** — complete.
 
 Implemented so far:
 - Frontend scaffold (React + TypeScript + Vite + Tailwind CSS + React Router) with placeholder pages.
@@ -89,7 +90,49 @@ Implemented so far:
 - Every `Submission` document is already a graded attempt by construction (Run Code never writes one - only `submit_code_job` does), so analytics needed no new filtering to exclude ungraded activity.
 - Frontend charts are hand-built (no charting library added): a small reusable `RankedBarList` (horizontal bars, single sequential hue or a per-item color, native hover detail) and a `SubmissionTrendChart` (stacked SVG bars with a hover tooltip, a "View as table" fallback, and 2-series legend) - both reuse the app's existing design tokens (primary/secondary/zinc, and the same green/amber/red difficulty colors already used by `DifficultyBadge`) rather than introducing a new palette.
 
+- **Security review** (TTD Phase 6 scope: "Security review... for production deployment"). A manual, whole-codebase audit (not just a diff review, since every prior phase already merged straight to `main`) found and fixed three concrete issues - see "Security Review Findings (Phase 13)" below for the full writeup:
+  1. **JWT secret had an insecure, publicly-known fallback with no production guard.** `Settings` now refuses to start (`RuntimeError`, fails at import time - before the API, a worker, or any script can run) if `ENVIRONMENT != "development"` and `JWT_SECRET_KEY` is still the shipped placeholder.
+  2. **Password changes/resets didn't invalidate already-issued tokens.** Access tokens now carry an `iat` claim; `get_current_user` rejects any token issued before the account's last password change (`User.updatedAt`, which only ever changes on a password change/reset). Tokens issued before this fix (no `iat`) are grandfathered through unaffected.
+  3. **The general problem bank had no way to keep an assessment's questions confidential before/during a round.** Problems can now be flagged `isAssessmentOnly` (admin-settable, defaults `false` so nothing existing changes behavior) - such a problem is excluded from `GET /api/problems`, and `GET /api/problems/{id}` / practice-mode Run-Submit now 404 for a student who hasn't actually been assigned it by starting a round that includes it (checked against their own `RoundSession.assignedQuestions` - the same path the round-hub UI itself uses).
+- These fixes don't change any existing round/practice/submission behavior for problems that stay at the `isAssessmentOnly` default (`false`) - they add a capability admins can opt into per problem, and close a token-lifetime gap that only matters at the moment of a security-motivated password reset.
+
 Everything else described in the project specification (multi-language support, AI hints, badges/streaks, email reminders, etc.) is explicitly listed as a *post-v1* future enhancement and is **not** in scope for this build.
+
+## Security Review Findings (Phase 13)
+
+A manual review covering authentication/session management, authorization (IDOR checks across every route that takes a raw ID), input validation, injection surfaces (NoSQL, command, template), secrets/crypto handling, and data exposure. All three findings below were fixed in this phase; nothing else at HIGH/MEDIUM confidence was found (see the areas explicitly reviewed and cleared, further down).
+
+### Finding 1 — Hardcoded JWT secret fallback, no production safeguard
+
+* **Severity:** High
+* **File:** `backend/app/core/config.py`
+* **Description:** `jwt_secret_key` defaulted to the literal string `dev-only-insecure-secret-change-me-in-production`, documented in both `config.py` and the public `.env.example` - anyone who reads this (public) repository knows the exact fallback value. Nothing prevented the app from actually starting with that value in a non-development deployment.
+* **Exploit scenario:** An operator deploys the API without setting the `JWT_SECRET_KEY` environment variable (an easy step to miss - the app starts and appears to work fine either way). Anyone who has read the source can then craft a JWT with `{"sub": "<any user id>", "role": "admin"}` signed with the known secret and gain full admin access, including student data, round/problem management, and grading.
+* **Fix:** `Settings.validate_for_production()` runs immediately at import time (covering the API, the RQ worker, and any one-off script) and raises a `RuntimeError` if `ENVIRONMENT != "development"` while `JWT_SECRET_KEY` still equals the shipped placeholder. Verified both directions: starts normally in dev, and with a real secret in production; refuses to start with the default secret and `ENVIRONMENT=production`.
+
+### Finding 2 — Password change/reset didn't invalidate previously issued tokens
+
+* **Severity:** Medium
+* **Files:** `backend/app/core/security.py`, `backend/app/core/dependencies.py`
+* **Description:** Access tokens are stateless JWTs valid for up to 12 hours (`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`), with no server-side revocation list. Neither `AuthService.change_password` nor `StudentService.reset_password` did anything beyond updating the stored password hash - a token issued before either action remained fully valid until its natural expiry.
+* **Exploit scenario:** A student's credentials leak (shared temp password, shoulder-surfing, etc.) and an attacker logs in, obtaining a valid token. The admin discovers this and resets the student's password (or the student changes it themselves) specifically to cut off the attacker's access - but the attacker's already-issued token keeps working for up to 12 more hours regardless, defeating the purpose of the reset.
+* **Fix:** `create_access_token` now embeds an `iat` (issued-at) claim. `get_current_user` compares it against `User.updatedAt` (which, in this codebase, only ever changes on a password change/reset - verified by checking every write path to the `users` collection) and rejects (401) any token issued before the account's last password change. Tokens without an `iat` claim (issued before this fix shipped) are left unaffected, so existing sessions aren't force-logged-out by the deploy itself.
+
+### Finding 3 — Coding-round question pools were readable early via the general problem bank
+
+* **Severity:** Medium (assessment-integrity / information disclosure, not account compromise)
+* **Files:** `backend/app/models/problem.py`, `backend/app/services/problem_service.py`, `backend/app/routes/problems.py`, `backend/app/routes/code_execution.py`
+* **Description:** `GET /api/problems` and `GET /api/problems/{id}` are unscoped - any authenticated student could list and read the full statement, examples, and public test cases of **every** problem in the bank at any time, including ones assigned to a round they hadn't started (or that hadn't opened) yet. Coding rounds (Phase 8) reuse the same `problems` collection for their question pool, and the round system's own design explicitly keeps the pool hidden until a student starts ("`GET /api/rounds` ... question pool hidden until they start" - Phase 8's own README notes) - a design intent the always-open problem bank endpoints completely bypassed.
+* **Exploit scenario:** A student notices a round is scheduled (`GET /api/rounds` shows it, without its problem IDs) and browses `GET /api/problems` shortly before or during the round's window, reading full statements for problems that turn out to be exactly what's assigned - either because it's a small bank and process of elimination narrows it down, or because a problem ID leaks (e.g., shared by a student who already started). They arrive at the assessment having already read (and possibly solved) the question in advance.
+* **Fix:** Added an admin-settable `isAssessmentOnly` flag on `Problem` (default `false` - no existing problem's visibility changes). `ProblemService.list_problems` excludes such problems entirely; `get_problem_public` 404s (never 403, so existence can't be inferred) unless the requesting student has an actual `RoundSession` whose `assignedQuestions` includes that problem - the same condition that lets them reach it through the round hub in the first place. The same check was added to practice-mode (`roundId` omitted) `POST /api/code/run` and `/submit`, so a known/guessed assessment-only problem ID can't be run or submitted outside its round either; round-scoped submissions were already correctly gated via the existing `assert_can_submit` check and needed no change.
+
+### Areas reviewed and cleared (no finding)
+
+* **Authorization/IDOR:** every route taking a raw ID (results, autosave, activity, job status, admin sessions) was checked - all correctly scope by `current_user.id` server-side, never a client-supplied student ID. All 26 admin routes are gated by `get_current_admin_user`.
+* **Role trust:** `get_current_admin_user` checks the DB-fetched `User.role`, not the JWT's `role` claim - a stale/forged claim in an otherwise-valid token (signed with the real secret) can't grant privilege it doesn't already have.
+* **Injection:** no `eval`/`exec`/`subprocess`/unsafe deserialization anywhere in the backend; student code and stdin are base64-encoded before being sent to Judge0 (never interpolated into a shell command, path, or header); all MongoDB filters are built from Pydantic-typed fields (never raw client dicts), so NoSQL operator injection (e.g. `{"$ne": null}` smuggled through a string field) isn't reachable; the CSV student-import path parses in-memory only, never writes to or reads from a client-controlled path.
+* **Crypto:** bcrypt (timing-safe, random per-hash salt) for passwords; `secrets.choice` (CSPRNG) for temporary passwords; JWT decode pins `algorithms=[...]` to the configured algorithm, closing the classic "alg: none" bypass.
+* **XSS:** no `dangerouslySetInnerHTML` (or equivalent) anywhere in the frontend; React's default escaping covers every place user-controlled content (names, problem text, submitted code shown back to its own author) is rendered.
 
 ## Prerequisites
 
@@ -389,3 +432,19 @@ This creates the 10 named DS01-DS10 problems from the spec, each with 2 public a
 - "Weakest topics" and the difficulty/problem pass rates are platform-wide aggregates, not a per-student diagnostic - the PRD explicitly scopes real "advanced analytics for weak-topic detection" (i.e., per-student skill-gap identification) as a *post-v1* future enhancement, not part of this build.
 - The submission trend is a fixed 14-day window with no date-range picker yet - a reasonable default for "how's the club doing lately", but not adjustable without a code change.
 - Learning engagement counts a module as "started" by a student the moment they complete its first topic - it doesn't distinguish "actively working through it" from "completed it long ago and moved on," since `topic_progress` only stores a completion timestamp, not an in-progress/viewed state.
+
+## Testing Phase 13
+
+1. **JWT secret guard.** From `backend/`, with the venv active: `ENVIRONMENT=production python -c "from app.core.config import settings"` should raise `RuntimeError` (still on the default secret). Then `ENVIRONMENT=production JWT_SECRET_KEY=some-real-value python -c "from app.core.config import settings"` should succeed silently. Plain `python -c "from app.core.config import settings"` (no env overrides, i.e. the default `ENVIRONMENT=development`) should also succeed, same as before this phase.
+2. **Stale token rejection.** Log in as any user and note the token (or watch it in the browser's network tab / localStorage). As admin, reset that student's password (or have the student change their own). Try using the *old* token against any protected endpoint (e.g. `GET /api/auth/me` with the old `Authorization: Bearer <token>` in `/docs` or curl) - expect `401`. Log in again to get a fresh token and confirm it works normally.
+3. **Assessment-only problems.** As admin, open `/admin/problems`, create a new problem with "Assessment only" checked (or open an existing one and check the box in `/admin/problems/:id`). Confirm it disappears from `/student/problems` for a student who isn't assigned it. Try `GET /api/problems/{id}` directly with a student token - expect `404`. Add the problem to a round's pool, have that student start the round, and confirm the problem is now reachable both through the round hub and via a direct `GET /api/problems/{id}` call. Confirm existing (non-flagged) problems are completely unaffected.
+4. Run the full existing test suite for Phases 8-12 again (or re-run their integration scripts, if you kept them) to confirm nothing regressed - the fixes touch shared code (`get_current_user`, `ProblemService`, `POST /api/code/run|submit`) used by every round/practice flow.
+
+## Known Limitations (Phase 13)
+
+- **No real MongoDB was available in this environment** (same as prior phases). All three fixes were verified with 11 targeted checks against an in-memory Mongo mock, plus two direct subprocess checks proving the JWT startup guard both fires (insecure secret + non-dev environment) and passes (real secret configured). Re-running Phases 10-12's existing integration suites (56 checks total) against the same changed shared code (`get_current_user`, `ProblemService`) confirmed zero regressions. **Not** verified against real MongoDB Atlas or through an actual browser session.
+- This was a manual code review, not a scanner/dependency-vulnerability audit - third-party package versions (FastAPI, PyJWT, bcrypt, Motor, React, Vite, etc.) were not individually checked against CVE databases. Run `pip list --outdated` / `npm audit` before a real production deployment.
+- The stale-token check has coarse granularity: it invalidates a token the moment *any* password change happens, which is exactly the intended behavior for change-password/reset-password, but there's no separate "log out all other sessions" action independent of a password change (not requested by the spec, and stateless JWTs would need an actual revocation store to support it properly).
+- `isAssessmentOnly` is opt-in and defaults to `false` on every existing problem - the 10 seeded DS01-DS10 problems (used by both practice and the example rounds from earlier phases' testing) remain fully practice-visible unless an admin explicitly flags them. Flagging a problem that's *already* being actively used in a live round pool is safe (it only affects the general bank endpoints, not the round-scoped path), but flagging one that students have already been practicing on doesn't retroactively hide anything they've already seen.
+- No CSRF concern to mitigate: the API is a pure JSON REST backend with a `Bearer` token in the `Authorization` header (never a cookie), so there's no ambient-credential attack surface for CSRF in the first place - noted here only because it's a common checklist item, not because anything was found or changed.
+- Rate limiting, dependency-version currency, and infrastructure-level hardening (TLS termination, firewall rules, MongoDB Atlas network access lists, Judge0 instance isolation) are explicitly out of this phase's scope per the review's exclusions, and are part of Phase 14 (load testing and production deployment) instead.

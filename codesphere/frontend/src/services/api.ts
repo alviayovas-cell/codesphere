@@ -284,6 +284,7 @@ export interface ProblemInput {
   topic: string
   language?: string
   marks: number
+  isAssessmentOnly?: boolean
 }
 
 export function createProblem(payload: ProblemInput): Promise<ProblemAdminView> {

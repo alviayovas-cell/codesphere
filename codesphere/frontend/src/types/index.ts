@@ -94,6 +94,7 @@ export interface TestCaseAdminView {
 
 export interface ProblemAdminView extends ProblemPublic {
   testCases: TestCaseAdminView[]
+  isAssessmentOnly: boolean
 }
 
 export type Verdict =

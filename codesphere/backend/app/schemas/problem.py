@@ -60,6 +60,9 @@ class ProblemCreate(BaseModel):
     topic: str
     language: str = "C"
     marks: int
+    is_assessment_only: bool = Field(
+        default=False, serialization_alias="isAssessmentOnly", validation_alias="isAssessmentOnly"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -79,6 +82,9 @@ class ProblemUpdate(BaseModel):
     topic: str | None = None
     language: str | None = None
     marks: int | None = None
+    is_assessment_only: bool | None = Field(
+        default=None, serialization_alias="isAssessmentOnly", validation_alias="isAssessmentOnly"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -117,3 +123,6 @@ class ProblemPublic(BaseModel):
 
 class ProblemAdminView(ProblemPublic):
     test_cases: list[TestCaseAdminView] = Field(default_factory=list, serialization_alias="testCases")
+    is_assessment_only: bool = Field(
+        default=False, serialization_alias="isAssessmentOnly", validation_alias="isAssessmentOnly"
+    )

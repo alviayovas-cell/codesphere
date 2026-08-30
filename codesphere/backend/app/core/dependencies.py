@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError
@@ -100,6 +102,19 @@ async def get_current_user(
     user = await user_repository.find_by_id(user_id)
     if user is None:
         raise _UNAUTHORIZED
+
+    # Reject tokens issued before the account's last password change, so a
+    # security-motivated reset (compromised credentials, admin override)
+    # actually invalidates whatever token an attacker already holds instead
+    # of leaving it valid until its natural expiry. Only User.change_password
+    # and User.reset_password ever touch updatedAt, so this can't be
+    # triggered by unrelated activity. Tokens issued before this check
+    # existed (no `iat` claim) are grandfathered through unaffected.
+    issued_at = payload.get("iat")
+    if issued_at is not None and user.updated_at is not None:
+        issued_at_dt = datetime.fromtimestamp(issued_at, tz=timezone.utc)
+        if issued_at_dt < user.updated_at - timedelta(seconds=2):
+            raise _UNAUTHORIZED
 
     return user
 

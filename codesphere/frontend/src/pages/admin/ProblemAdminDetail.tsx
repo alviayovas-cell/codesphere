@@ -59,6 +59,17 @@ export default function ProblemAdminDetail() {
     }
   }
 
+  async function handleToggleAssessmentOnly() {
+    if (!problemId || !problem) return
+    setError(null)
+    try {
+      await api.updateProblem(problemId, { isAssessmentOnly: !problem.isAssessmentOnly })
+      load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not update problem.')
+    }
+  }
+
   if (error && !problem) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
@@ -83,8 +94,25 @@ export default function ProblemAdminDetail() {
         <span>{problem.topic}</span>
         <DifficultyBadge difficulty={problem.difficulty} />
         <span>{problem.marks} marks</span>
+        {problem.isAssessmentOnly && <Badge variant="warning">Assessment only</Badge>}
       </div>
       <p className="mt-3 whitespace-pre-line text-sm text-zinc-700 dark:text-zinc-300">{problem.description}</p>
+
+      <label className="mt-3 flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+        <input
+          type="checkbox"
+          checked={problem.isAssessmentOnly}
+          onChange={handleToggleAssessmentOnly}
+          className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600"
+        />
+        <span>
+          Assessment only
+          <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+            Hide this problem from the general practice bank - only visible to a student once they've started a round
+            it's assigned to.
+          </span>
+        </span>
+      </label>
 
       {error && <div className="mt-3"><InlineError message={error} /></div>}
 

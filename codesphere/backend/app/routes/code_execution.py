@@ -42,14 +42,31 @@ def _redis() -> Redis:
     return get_redis_connection()
 
 
+async def _has_round_access(
+    round_session_repository: RoundSessionRepository, student_id: str, problem_id: str
+) -> bool:
+    """An assessment-only problem is reachable outside a round context only
+    once this student has actually been assigned it by starting a round -
+    same rule as ProblemService.get_problem_public, applied here so a
+    guessed/known problem ID can't be Run/Submit-ed in practice mode
+    (roundId omitted) before or without ever starting that round."""
+    sessions = await round_session_repository.find_many({"studentId": student_id}, limit=1000)
+    return any(q.problem_id == problem_id for session in sessions for q in session.assigned_questions)
+
+
 @router.post("/run", response_model=JobEnqueuedResponse, dependencies=[Depends(enforce_run_rate_limit)])
 async def run_code(
     payload: RunCodeRequest,
     current_user: User = Depends(get_current_user),
     problem_repository: ProblemRepository = Depends(get_problem_repository),
+    round_session_repository: RoundSessionRepository = Depends(get_round_session_repository),
     connection: Redis = Depends(_redis),
 ) -> JobEnqueuedResponse:
-    if await problem_repository.find_by_id(payload.problem_id) is None:
+    problem = await problem_repository.find_by_id(payload.problem_id)
+    if problem is None or (
+        problem.is_assessment_only
+        and not await _has_round_access(round_session_repository, current_user.id, payload.problem_id)
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem not found")
 
     queue = get_queue(QUEUE_RUN_CODE, connection)
@@ -77,7 +94,15 @@ async def submit_code(
     activity_event_repository: ActivityEventRepository = Depends(get_activity_event_repository),
     connection: Redis = Depends(_redis),
 ) -> JobEnqueuedResponse:
-    if await problem_repository.find_by_id(payload.problem_id) is None:
+    problem = await problem_repository.find_by_id(payload.problem_id)
+    if problem is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem not found")
+
+    if (
+        problem.is_assessment_only
+        and payload.round_id is None
+        and not await _has_round_access(session_repository, current_user.id, payload.problem_id)
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem not found")
 
     if payload.round_id is not None:

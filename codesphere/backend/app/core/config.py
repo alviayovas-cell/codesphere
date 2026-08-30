@@ -1,5 +1,12 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Shipped in source (and in .env.example) as an obvious, documented dev-only
+# placeholder - anyone can read it on GitHub. If a deployment ever runs with
+# this value and ENVIRONMENT != "development", every JWT the server issues
+# (including admin tokens) could be forged by anyone who knows this string.
+# validate_for_production() below refuses to start in that case.
+INSECURE_DEFAULT_JWT_SECRET = "dev-only-insecure-secret-change-me-in-production"
+
 
 class Settings(BaseSettings):
     app_name: str = "CodeSphere API"
@@ -9,7 +16,7 @@ class Settings(BaseSettings):
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_db_name: str = "codesphere"
 
-    jwt_secret_key: str = "dev-only-insecure-secret-change-me-in-production"
+    jwt_secret_key: str = INSECURE_DEFAULT_JWT_SECRET
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 720
 
@@ -33,5 +40,20 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+    def validate_for_production(self) -> None:
+        """Fail fast, before anything starts serving traffic or processing
+        jobs, if a non-development deployment is still using the public
+        placeholder JWT secret. Called at import time below so it covers
+        every entrypoint that loads settings (the API, the worker, and any
+        one-off script) - not just app.main."""
+        if self.environment != "development" and self.jwt_secret_key == INSECURE_DEFAULT_JWT_SECRET:
+            raise RuntimeError(
+                "JWT_SECRET_KEY is still the insecure development default, but ENVIRONMENT is "
+                f"'{self.environment}'. Set a real secret via the JWT_SECRET_KEY environment "
+                "variable before running outside development, e.g.: "
+                'python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
+
 
 settings = Settings()
+settings.validate_for_production()

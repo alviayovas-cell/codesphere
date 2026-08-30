@@ -1,6 +1,7 @@
 import re
 
 from app.database.repositories.problem_repository import ProblemRepository, TestCaseRepository
+from app.database.repositories.round_session_repository import RoundSessionRepository
 from app.models.common import TestCaseVisibility
 from app.models.problem import Problem, ProblemExample, TestCase
 from app.schemas.problem import (
@@ -36,14 +37,27 @@ class DuplicateSlugError(Exception):
 
 
 class ProblemService:
-    def __init__(self, problem_repository: ProblemRepository, test_case_repository: TestCaseRepository):
+    def __init__(
+        self,
+        problem_repository: ProblemRepository,
+        test_case_repository: TestCaseRepository,
+        round_session_repository: RoundSessionRepository | None = None,
+    ):
         self.problem_repository = problem_repository
         self.test_case_repository = test_case_repository
+        # Optional - only needed by the student-facing routes, to check
+        # round-assignment access for assessment-only problems. Admin routes
+        # don't pass this since they always see every problem regardless.
+        self.round_session_repository = round_session_repository
 
     # -- student-facing reads -------------------------------------------------
 
     async def list_problems(self) -> list[ProblemSummary]:
         problems = await self.problem_repository.find_many(limit=1000)
+        # Assessment-only problems never appear in the general practice bank
+        # - they're reachable only through a round a student has actually
+        # started (see get_problem_public's access check below).
+        problems = [p for p in problems if not p.is_assessment_only]
         problems.sort(key=lambda p: p.created_at)
         return [
             ProblemSummary(
@@ -58,15 +72,31 @@ class ProblemService:
             for p in problems
         ]
 
-    async def get_problem_public(self, problem_id: str) -> ProblemPublic:
+    async def get_problem_public(self, problem_id: str, student_id: str | None = None) -> ProblemPublic:
         problem = await self.problem_repository.find_by_id(problem_id)
         if problem is None:
+            raise ProblemNotFoundError("Problem not found")
+
+        if problem.is_assessment_only and not await self._student_has_round_access(problem_id, student_id):
+            # 404, not 403 - a student probing problem IDs shouldn't be able
+            # to distinguish "doesn't exist" from "exists but is exam-only
+            # and not yours yet".
             raise ProblemNotFoundError("Problem not found")
 
         public_cases = await self.test_case_repository.find_many(
             {"problemId": problem_id, "visibility": TestCaseVisibility.PUBLIC.value}, limit=1000
         )
         return self._to_public(problem, public_cases)
+
+    async def _student_has_round_access(self, problem_id: str, student_id: str | None) -> bool:
+        """True once this student has actually started a round that
+        assigned them this problem - matches the round-hub UI's own path
+        to this problem (rounds/{id} -> assignedQuestions -> problem
+        detail), so legitimate round-taking is never blocked."""
+        if student_id is None or self.round_session_repository is None:
+            return False
+        sessions = await self.round_session_repository.find_many({"studentId": student_id}, limit=1000)
+        return any(q.problem_id == problem_id for session in sessions for q in session.assigned_questions)
 
     # -- admin -----------------------------------------------------------------
 
@@ -91,6 +121,7 @@ class ProblemService:
             topic=problem.topic,
             language=problem.language,
             marks=problem.marks,
+            is_assessment_only=problem.is_assessment_only,
             public_test_cases=[
                 TestCasePublic(input=c.input, expected_output=c.expected_output) for c in public_cases
             ],
@@ -115,6 +146,7 @@ class ProblemService:
                 topic=payload.topic,
                 language=payload.language,
                 marks=payload.marks,
+                is_assessment_only=payload.is_assessment_only,
             )
         )
 

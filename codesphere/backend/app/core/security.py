@@ -17,8 +17,13 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def create_access_token(user_id: str, role: str) -> str:
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    payload = {"sub": user_id, "role": role, "exp": expires_at}
+    issued_at = datetime.now(timezone.utc)
+    expires_at = issued_at + timedelta(minutes=settings.jwt_access_token_expire_minutes)
+    # `iat` lets get_current_user reject tokens issued before the account's
+    # last password change (see dependencies.py) - without it, resetting a
+    # compromised student's password wouldn't actually invalidate whatever
+    # token the attacker already holds.
+    payload = {"sub": user_id, "role": role, "iat": issued_at, "exp": expires_at}
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 

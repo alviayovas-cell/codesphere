@@ -22,6 +22,7 @@ interface NewProblemForm {
   inputFormat: string
   outputFormat: string
   constraints: string
+  isAssessmentOnly: boolean
 }
 
 const emptyForm: NewProblemForm = {
@@ -33,6 +34,7 @@ const emptyForm: NewProblemForm = {
   inputFormat: '',
   outputFormat: '',
   constraints: '',
+  isAssessmentOnly: false,
 }
 
 export default function ProblemManagement() {
@@ -65,6 +67,7 @@ export default function ProblemManagement() {
         inputFormat: form.inputFormat,
         outputFormat: form.outputFormat,
         constraints: form.constraints,
+        isAssessmentOnly: form.isAssessmentOnly,
       })
       setForm(emptyForm)
       setShowForm(false)
@@ -123,6 +126,21 @@ export default function ProblemManagement() {
           <Textarea placeholder="Input Format" value={form.inputFormat} onChange={(e) => setForm({ ...form, inputFormat: e.target.value })} rows={2} />
           <Textarea placeholder="Output Format" value={form.outputFormat} onChange={(e) => setForm({ ...form, outputFormat: e.target.value })} rows={2} />
           <Textarea placeholder="Constraints" value={form.constraints} onChange={(e) => setForm({ ...form, constraints: e.target.value })} rows={2} />
+          <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+            <input
+              type="checkbox"
+              checked={form.isAssessmentOnly}
+              onChange={(e) => setForm({ ...form, isAssessmentOnly: e.target.checked })}
+              className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600"
+            />
+            <span>
+              Assessment only
+              <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+                Hide this problem from the general practice bank - only visible to a student once they've started a
+                round it's assigned to.
+              </span>
+            </span>
+          </label>
           <Button variant="primary" className="self-start" onClick={handleCreate} disabled={!canSubmit}>
             Create
           </Button>
