@@ -1,3 +1,4 @@
+import asyncio
 import csv
 import io
 from datetime import datetime, timezone
@@ -59,10 +60,14 @@ class StudentService:
                 continue
 
             temp_password = generate_temporary_password()
+            # bcrypt is synchronous/CPU-bound - offload it so importing a
+            # large CSV of students doesn't block the event loop (and every
+            # other in-flight request) for the sum of every row's hash time.
+            password_hash = await asyncio.to_thread(hash_password, temp_password)
             user = User(
                 name=name,
                 email=email,
-                password_hash=hash_password(temp_password),
+                password_hash=password_hash,
                 register_number=register_number,
                 student_class=student_class,
                 role=UserRole.STUDENT,
@@ -90,10 +95,11 @@ class StudentService:
             raise StudentNotFoundError("Student not found")
 
         temp_password = generate_temporary_password()
+        new_hash = await asyncio.to_thread(hash_password, temp_password)
         await self.user_repository.update_one(
             student_id,
             {
-                "passwordHash": hash_password(temp_password),
+                "passwordHash": new_hash,
                 "mustChangePassword": True,
                 "updatedAt": datetime.now(timezone.utc),
             },

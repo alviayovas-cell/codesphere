@@ -416,9 +416,12 @@ class CodingRoundService:
             raise RuntimeError("list_sessions_for_round requires a user_repository")
 
         sessions = await self.session_repository.find_many({"roundId": round_id}, limit=10000)
+        # One batch lookup instead of one find_by_id per session - matters
+        # once a round has dozens of students (Phase 14 load testing).
+        students = {u.id: u for u in await self.user_repository.find_by_ids([s.student_id for s in sessions])}
         summaries: list[SessionMonitorSummary] = []
         for session in sessions:
-            student = await self.user_repository.find_by_id(session.student_id)
+            student = students.get(session.student_id)
             summaries.append(
                 SessionMonitorSummary(
                     session_id=session.id,

@@ -22,6 +22,16 @@ class BaseRepository(Generic[ModelType]):
         document = await self.collection.find_one({"_id": ObjectId(id)})
         return self.model(**document) if document else None
 
+    async def find_by_ids(self, ids: list[str]) -> list[ModelType]:
+        """Batch lookup - one round trip for many documents, instead of the
+        N-round-trip find_by_id-in-a-loop pattern that shows up badly under
+        load (e.g. resolving a student name per row of a 60-row leaderboard)."""
+        valid_ids = [ObjectId(i) for i in ids if ObjectId.is_valid(i)]
+        if not valid_ids:
+            return []
+        cursor = self.collection.find({"_id": {"$in": valid_ids}})
+        return [self.model(**document) async for document in cursor]
+
     async def find_one(self, filter: dict[str, Any]) -> ModelType | None:
         document = await self.collection.find_one(filter)
         return self.model(**document) if document else None

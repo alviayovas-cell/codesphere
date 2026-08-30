@@ -28,6 +28,7 @@ codesphere/
 **Phase 11: Results and Leaderboard** — complete.
 **Phase 12: Admin Analytics** — complete.
 **Phase 13: Security Review** — complete.
+**Phase 14: Load Testing and Production Deployment** — complete.
 
 Implemented so far:
 - Frontend scaffold (React + TypeScript + Vite + Tailwind CSS + React Router) with placeholder pages.
@@ -96,7 +97,54 @@ Implemented so far:
   3. **The general problem bank had no way to keep an assessment's questions confidential before/during a round.** Problems can now be flagged `isAssessmentOnly` (admin-settable, defaults `false` so nothing existing changes behavior) - such a problem is excluded from `GET /api/problems`, and `GET /api/problems/{id}` / practice-mode Run-Submit now 404 for a student who hasn't actually been assigned it by starting a round that includes it (checked against their own `RoundSession.assignedQuestions` - the same path the round-hub UI itself uses).
 - These fixes don't change any existing round/practice/submission behavior for problems that stay at the `isAssessmentOnly` default (`false`) - they add a capability admins can opt into per problem, and close a token-lifetime gap that only matters at the moment of a security-motivated password reset.
 
+- **Load testing (TTD Phase 6 scope: "~60 concurrent users")**: a load-test harness (see "Load Test Results (Phase 14)" below) drives 60 concurrent simulated students through the entire real flow - login, browse learning content, list/view problems, practice Run/Submit, start a coding round, autosave, submit every assigned question, finish, check results and the leaderboard - against the real FastAPI app (in-process ASGI, not a mock of the app itself) with a real RQ worker pool and a stubbed Judge0 (so the numbers reflect *this app's* concurrency handling, not a shared free third-party demo instance's rate limits). Found and fixed two real bottlenecks:
+  1. **bcrypt blocked the whole async event loop.** Login/password-change/CSV-import called synchronous, CPU-bound `bcrypt` directly inside `async def` handlers - under 60 concurrent logins (a very real "everyone logs in when the coding club session starts" scenario), every request on the server, regardless of endpoint, stalled behind whichever bcrypt call currently held the single-threaded event loop hostage (measured: `GET /api/auth/me` averaging **7.4 seconds** with a **13.6s** worst case, despite doing no bcrypt work itself). Fixed by offloading every `hash_password`/`verify_password` call to a worker thread (`asyncio.to_thread`) at its async call sites (`auth_service.py`, `student_service.py`) - `get_me` dropped to an 18.9ms average (**390x**), and overall wall-clock for the full 60-student flow dropped from 23.1s to 10.0s.
+  2. **N+1 (and N×M) queries in the admin/results/leaderboard endpoints.** Resolving each session's score looped a DB query per (student, question) pair, and resolving each session's student name looped a `find_by_id` per session - for a round with 60 finished students × 3 questions, `GET /api/admin/rounds/{id}/results` made **612** repository calls. Added `BaseRepository.find_by_ids` (one `$in` query instead of N), and refactored `ResultsService`/`CodingRoundService.list_sessions_for_round` to load every round's submissions and problems **once** and score/rank entirely in memory. Same endpoint, same data: **6** repository calls (a **~100x** reduction), latency down from 42.5ms to under 10ms.
+  - Zero request errors across both load-test runs (before and after the fixes) - the app was never *incorrect* under load, just slow in these two specific spots.
+- **Production deployment**: `backend/Dockerfile` (API + RQ worker share one image, different `command:`), `frontend/Dockerfile` (multi-stage Vite build served by nginx, with SPA fallback routing and long-cache headers for hashed assets), and a root `docker-compose.yml` wiring mongo + redis + backend + N worker replicas + frontend for a self-contained single-VM deployment - or point `MONGODB_URI`/`REDIS_URL` at managed services (MongoDB Atlas, a managed Redis) instead and drop those two services, with no application code changes needed either way. See "Production Deployment" below for the full pre-launch checklist.
+
 Everything else described in the project specification (multi-language support, AI hints, badges/streaks, email reminders, etc.) is explicitly listed as a *post-v1* future enhancement and is **not** in scope for this build.
+
+## Load Test Results (Phase 14)
+
+60 concurrent simulated students, full end-to-end flow (login → browse → practice run/submit → start a coding round → autosave + submit 3 assigned questions → finish → check results/leaderboard), against the real app via an in-process ASGI transport (real FastAPI dependency injection, real rate limiter, a real 3-thread RQ worker pool draining a real fakeredis-backed queue, Judge0 stubbed with ~30-150ms jitter so results reflect this app, not a third-party demo instance's rate limiting). Before and after the two fixes above:
+
+| Metric | Before | After |
+|---|---|---|
+| Full 60-student flow, wall-clock | 23.1s | **10.0s** |
+| `GET /api/auth/me`, avg / max | 7,396ms / 13,588ms | **18.9ms / 64.0ms** |
+| `POST /api/auth/login`, avg / max | 6,497ms / 13,791ms | **954ms / 1,553ms** |
+| `GET /admin/rounds/{id}/results` (60 students), latency / DB calls | 42.5ms / 612 calls | **9.6ms / 6 calls** |
+| `GET /admin/rounds/{id}/leaderboard` (60 students), latency / DB calls | 19.6ms / 252 calls | **10.0ms / 6 calls** |
+| `GET /admin/rounds/{id}/sessions` (60 students), latency / DB calls | 26.3ms / 62 calls | **9.3ms / 3 calls** |
+| Request errors | 0 | 0 |
+
+Login's remaining ~954ms average is genuine bcrypt CPU cost under a *simultaneous* 60-way burst (Python's default thread pool has a bounded size, so 60 truly-concurrent bcrypt hashes still queue somewhat for a CPU/thread slot) - the fix's actual claim is narrower and already proven above: the event loop itself stays responsive for every *other* concurrent request while that happens, instead of everything on the server stalling together. In realistic usage, 60 students don't click "log in" in the same millisecond, so real-world latency will sit well below this intentionally-worst-case synchronized-burst number.
+
+## Production Deployment
+
+**Before deploying anywhere non-development**, work through this checklist (mostly enforced automatically by Phase 13's fixes, listed here for visibility):
+
+1. **`JWT_SECRET_KEY`** - set to a real generated secret (`python -c "import secrets; print(secrets.token_urlsafe(48))"`). The app **refuses to start** otherwise once `ENVIRONMENT` isn't `development` (Phase 13).
+2. **`ENVIRONMENT=production`** (or anything other than `development`) - enables the check above and should match reality.
+3. **`MONGODB_URI`** - a real MongoDB (MongoDB Atlas recommended - a free/shared tier can sleep/cold-start, which conflicts with the PRD's "avoid sleeping/cold-start issues during scheduled coding rounds" requirement, so use at least a dedicated/always-on tier for a real event).
+4. **`REDIS_URL`** - a real Redis (managed, or the `redis` service in `docker-compose.yml` for a self-hosted single-VM deployment).
+5. **`JUDGE0_API_URL`** (+ `JUDGE0_API_KEY`/`JUDGE0_API_HOST` if using RapidAPI) - point at your own or a paid Judge0 instance. The free public demo instance used by default in development is shared, rate-limited, and explicitly not meant for a real event.
+6. **`CORS_ORIGINS`** - the real frontend origin(s), not `localhost:5173`.
+7. **`VITE_API_URL`** (frontend build arg) - the real, publicly-reachable backend URL. This is baked into the frontend bundle at build time, not read at runtime - rebuild the frontend image if it changes.
+8. **TLS/HTTPS** - neither uvicorn nor the bundled nginx config terminates TLS; put a reverse proxy or load balancer in front (a cloud provider's LB, Caddy, or nginx with a cert) that does, and forwards to the backend/frontend containers over plain HTTP internally.
+9. Run `python scripts/create_admin.py` once against the real database to create the first admin account, then use the admin UI to import students and manage content from there - same one-off bootstrap process as local dev, just pointed at production.
+10. **Scaling**: run more `worker` replicas (`docker compose up --scale worker=N`, or more container instances) to add grading throughput - RQ workers are stateless and safe to run in parallel, and this is exactly what Phase 7's priority queues were built for. Keep the `backend` API service to a single process/instance unless the in-memory Run/Submit rate limiter (`app/core/rate_limit.py`) is first moved to a shared store (e.g. Redis) - documented as a known limitation below, not yet needed at the target ~60-student scale per this phase's load test.
+
+### Quick start with Docker
+
+```
+cd codesphere
+cp backend/.env.example backend/.env   # fill in the real values from the checklist above
+docker compose up --build
+```
+
+This builds and runs mongo, redis, the backend API, two RQ worker replicas, and the nginx-served frontend. Visit the frontend's exposed port (80 by default) once everything reports healthy (`docker compose ps`).
 
 ## Security Review Findings (Phase 13)
 
@@ -448,3 +496,19 @@ This creates the 10 named DS01-DS10 problems from the spec, each with 2 public a
 - `isAssessmentOnly` is opt-in and defaults to `false` on every existing problem - the 10 seeded DS01-DS10 problems (used by both practice and the example rounds from earlier phases' testing) remain fully practice-visible unless an admin explicitly flags them. Flagging a problem that's *already* being actively used in a live round pool is safe (it only affects the general bank endpoints, not the round-scoped path), but flagging one that students have already been practicing on doesn't retroactively hide anything they've already seen.
 - No CSRF concern to mitigate: the API is a pure JSON REST backend with a `Bearer` token in the `Authorization` header (never a cookie), so there's no ambient-credential attack surface for CSRF in the first place - noted here only because it's a common checklist item, not because anything was found or changed.
 - Rate limiting, dependency-version currency, and infrastructure-level hardening (TLS termination, firewall rules, MongoDB Atlas network access lists, Judge0 instance isolation) are explicitly out of this phase's scope per the review's exclusions, and are part of Phase 14 (load testing and production deployment) instead.
+
+## Testing Phase 14
+
+1. **Load test.** From `backend/`, with the venv active: `pip install mongomock-motor mongomock fakeredis` (dev-only, not in `requirements.txt`), then `python scripts/load_test.py`. Confirm zero request errors and that no endpoint's latency looks pathological. The exact numbers from this environment are in "Load Test Results" above - use them as a rough baseline, not a guarantee (a different machine, a real MongoDB with real network latency, and a real Judge0 instance will all shift the absolute numbers).
+2. **bcrypt fix, concretely.** Start the real backend + frontend (with a reachable MongoDB). Open two browser tabs/incognito windows and submit the login form in both within a second of each other - both should complete in well under a second each, not visibly queue behind one another.
+3. **N+1 fix, concretely.** Seed or run a round with a couple dozen finished student sessions, then load `/admin/monitoring`, `/admin/rounds` → Results, and a round's leaderboard - each should feel instant regardless of student count (previously this scaled roughly linearly with students × questions).
+4. **Docker build** (requires Docker, not available in this development environment - see Known Limitations): `docker compose up --build` from `codesphere/`, after filling in `backend/.env` per the Production Deployment checklist above. Confirm `docker compose ps` shows every service healthy, then visit the frontend port and log in.
+5. **Production config guard**, if you haven't already exercised it in Phase 13's testing: confirm the backend refuses to start with `ENVIRONMENT=production` and the default `JWT_SECRET_KEY`, and starts fine with a real one.
+
+## Known Limitations (Phase 14)
+
+- **No real MongoDB, Redis, or Docker was available in this development environment.** The load test used mongomock-motor + fakeredis + real RQ `SimpleWorker` threads + a stubbed Judge0, driving the real FastAPI app in-process via `httpx`'s ASGI transport - genuinely exercises the app's own request handling, dependency injection, async concurrency, and query patterns, but **not** real network latency to MongoDB/Redis/Judge0, real OS-level TCP handling, or multiple real processes. Absolute latency numbers under a real deployment (especially with a MongoDB Atlas shared tier's network round-trips) will differ - the *relative* improvements (390x on `get_me`, ~100x fewer DB calls on admin results) are the load-bearing claims, not the specific millisecond figures.
+- **The Dockerfiles and docker-compose.yml were written carefully but never actually built or run** - no Docker was available in this sandbox. They follow standard, common patterns (multi-stage frontend build, shared backend image for API + worker, healthchecks, a `.dockerignore` per service) but should be validated end-to-end before a real launch, not trusted blindly.
+- **The in-memory rate limiter doesn't scale past one backend process.** `app/core/rate_limit.py` is a plain in-process dict - correct and sufficient for the single-instance deployment this phase's load test validated (60 concurrent students against one backend process handled comfortably), but if the API is ever horizontally scaled to multiple instances behind a load balancer, each instance would enforce its own independent 5-run/3-submit-per-minute limit instead of one shared one. Documented rather than fixed, since it isn't needed at the target scale - moving it to a Redis-backed limiter (the same Redis already used for the job queue) would be the fix if that scale is ever needed.
+- Load testing covered the student-facing flow and the admin monitoring/results/analytics endpoints, but not every admin CRUD endpoint (problem/round/learning-content management) - those are lower-frequency, single-admin-at-a-time operations by nature, not the ~60-concurrent-user path the PRD's NFRs are actually concerned with.
+- No APM/observability stack (structured logging aggregation, metrics, tracing) was added - out of scope for this phase, but worth having before a real production event if you want visibility into what's happening live rather than relying on container logs.

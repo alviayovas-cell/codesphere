@@ -9,6 +9,8 @@ from app.models.coding_round import CodingRound
 from app.models.common import SessionStatus, SubmissionType
 from app.models.problem import Problem
 from app.models.round_session import RoundSession
+from app.models.submission import Submission
+from app.models.user import User
 from app.schemas.results import (
     AdminRoundResultEntry,
     LeaderboardEntry,
@@ -38,46 +40,45 @@ class ResultsService:
         self.problem_repository = problem_repository
         self.user_repository = user_repository
 
-    # -- scoring -------------------------------------------------------------
+    # -- batch loading (Phase 14: these replace what used to be N/N*M
+    # per-student, per-question DB round trips - see README's Phase 14
+    # notes for the load-test numbers that motivated this) -----------------
 
     async def _load_problems(self, problem_ids: list[str]) -> dict[str, Problem]:
-        problems: dict[str, Problem] = {}
-        for problem_id in set(problem_ids):
-            problem = await self.problem_repository.find_by_id(problem_id)
-            if problem is not None:
-                problems[problem_id] = problem
-        return problems
+        unique_ids = list({pid for pid in problem_ids})
+        return {p.id: p for p in await self.problem_repository.find_by_ids(unique_ids)}
 
-    async def _best_submission_score(
-        self, student_id: str, round_id: str, problem_id: str
-    ) -> tuple[int, int, int, str | None]:
-        """Returns (score, passedTests, totalTests, verdict) from the
-        highest-scoring graded (Submit/Auto-Submit, never Run) submission
-        the student made for this problem within this round - competitive
-        judges reward your best attempt, not your last one."""
+    async def _load_students(self, student_ids: list[str]) -> dict[str, User]:
+        unique_ids = list({sid for sid in student_ids})
+        return {u.id: u for u in await self.user_repository.find_by_ids(unique_ids)}
+
+    async def _load_best_submissions_for_round(self, round_id: str) -> dict[tuple[str, str], Submission]:
+        """One query for the whole round: every graded (Submit/Auto-Submit)
+        submission any student made in it, reduced to the single
+        best-scoring one per (student, problem) pair - the same
+        best-attempt-wins rule as before, just computed in memory instead
+        of with a separate query per (student, question)."""
         submissions = await self.submission_repository.find_many(
-            {
-                "studentId": student_id,
-                "roundId": round_id,
-                "problemId": problem_id,
-                "submissionType": {"$in": _GRADED_SUBMISSION_TYPES},
-            },
-            limit=1000,
+            {"roundId": round_id, "submissionType": {"$in": _GRADED_SUBMISSION_TYPES}}, limit=200000
         )
-        if not submissions:
-            return 0, 0, 0, None
+        best: dict[tuple[str, str], Submission] = {}
+        for submission in submissions:
+            key = (submission.student_id, submission.problem_id)
+            current = best.get(key)
+            if current is None or (submission.score, submission.submitted_at) > (current.score, current.submitted_at):
+                best[key] = submission
+        return best
 
-        best = max(submissions, key=lambda s: (s.score, s.submitted_at))
-        return best.score, best.passed_tests, best.total_tests, best.verdict.value
+    # -- scoring -------------------------------------------------------------
 
-    async def _score_session(
-        self, session: RoundSession, problems: dict[str, Problem] | None = None
+    def _score_session(
+        self,
+        session: RoundSession,
+        problems: dict[str, Problem],
+        best_submissions: dict[tuple[str, str], Submission],
     ) -> tuple[int, int, list[QuestionResultPublic]]:
         """Returns (score, total_marks, per-question breakdown) for one
-        session, using each question's best graded attempt."""
-        if problems is None:
-            problems = await self._load_problems([q.problem_id for q in session.assigned_questions])
-
+        session, purely from already-loaded lookup tables - no DB calls."""
         results: list[QuestionResultPublic] = []
         score = 0
         total_marks = 0
@@ -86,9 +87,8 @@ class ResultsService:
             marks = problem.marks if problem else 0
             total_marks += marks
 
-            q_score, passed, total, verdict = await self._best_submission_score(
-                session.student_id, session.round_id, question.problem_id
-            )
+            best = best_submissions.get((session.student_id, question.problem_id))
+            q_score = best.score if best else 0
             score += q_score
             results.append(
                 QuestionResultPublic(
@@ -96,11 +96,11 @@ class ResultsService:
                     title=problem.title if problem else "Unknown problem",
                     difficulty=question.difficulty,
                     marks=marks,
-                    attempted=verdict is not None,
-                    verdict=verdict,
+                    attempted=best is not None,
+                    verdict=best.verdict.value if best else None,
                     score=q_score,
-                    passed_tests=passed,
-                    total_tests=total,
+                    passed_tests=best.passed_tests if best else 0,
+                    total_tests=best.total_tests if best else 0,
                 )
             )
         return score, total_marks, results
@@ -125,20 +125,30 @@ class ResultsService:
         only ever applies to a student's own result."""
         return datetime.now(timezone.utc) >= round_.end_time
 
-    async def _rank_finished_sessions(
+    async def _load_round_context(
         self, round_id: str, sessions: list[RoundSession]
-    ) -> list[tuple[RoundSession, int, int]]:
-        """Ranks finished sessions by score desc, then completion time asc
-        (faster finish wins ties). Returns (session, score, total_marks)
-        tuples in ranked order - rank is simply the 1-based position."""
-        problems = await self._load_problems(
-            [q.problem_id for s in sessions for q in s.assigned_questions]
-        )
-        scored = []
-        for session in sessions:
-            score, total_marks, _ = await self._score_session(session, problems)
-            scored.append((session, score, total_marks))
+    ) -> tuple[dict[str, Problem], dict[tuple[str, str], Submission]]:
+        """Loads everything needed to score every given session with exactly
+        two queries total (problems, submissions) regardless of student
+        count. Pass every session whose questions need to resolve to a real
+        problem (including in-progress ones for the admin view) - a session
+        left out here just scores as all-zero/unknown, it won't error."""
+        problems = await self._load_problems([q.problem_id for s in sessions for q in s.assigned_questions])
+        best_submissions = await self._load_best_submissions_for_round(round_id)
+        return problems, best_submissions
 
+    def _rank_sessions(
+        self,
+        sessions: list[RoundSession],
+        problems: dict[str, Problem],
+        best_submissions: dict[tuple[str, str], Submission],
+    ) -> list[tuple[RoundSession, int, int]]:
+        """Pure in-memory ranking (no DB calls) by score desc, completion
+        time asc (faster finish wins ties) - rank is the 1-based position."""
+        scored = [
+            (session, *self._score_session(session, problems, best_submissions)[:2])
+            for session in sessions
+        ]
         scored.sort(key=lambda t: (-t[1], t[0].completed_at or datetime.max.replace(tzinfo=timezone.utc)))
         return scored
 
@@ -155,18 +165,18 @@ class ResultsService:
                 continue
 
             available = self._results_available_to_student(round_, session)
-            score, total_marks, _ = await self._score_session(session)
+            all_round_sessions = [
+                s
+                for s in await self.session_repository.find_many({"roundId": round_.id}, limit=10000)
+                if s.status in _FINISHED_STATUSES
+            ]
+            problems, best_submissions = await self._load_round_context(round_.id, all_round_sessions)
+            ranked = self._rank_sessions(all_round_sessions, problems, best_submissions)
+            score, total_marks, _ = self._score_session(session, problems, best_submissions)
 
             rank = None
-            total_participants = None
+            total_participants = len(ranked) if available else None
             if available:
-                all_finished = [
-                    s
-                    for s in await self.session_repository.find_many({"roundId": round_.id}, limit=10000)
-                    if s.status in _FINISHED_STATUSES
-                ]
-                ranked = await self._rank_finished_sessions(round_.id, all_finished)
-                total_participants = len(ranked)
                 for position, (ranked_session, _, _) in enumerate(ranked, start=1):
                     if ranked_session.student_id == student_id:
                         rank = position
@@ -199,18 +209,18 @@ class ResultsService:
             raise SessionNotFoundError("You haven't completed this round yet")
 
         available = self._results_available_to_student(round_, session)
-        score, total_marks, questions = await self._score_session(session)
+        all_finished = [
+            s
+            for s in await self.session_repository.find_many({"roundId": round_id}, limit=10000)
+            if s.status in _FINISHED_STATUSES
+        ]
+        problems, best_submissions = await self._load_round_context(round_id, all_finished)
+        ranked = self._rank_sessions(all_finished, problems, best_submissions)
+        score, total_marks, questions = self._score_session(session, problems, best_submissions)
 
         rank = None
-        total_participants = None
+        total_participants = len(ranked) if available else None
         if available:
-            all_finished = [
-                s
-                for s in await self.session_repository.find_many({"roundId": round_id}, limit=10000)
-                if s.status in _FINISHED_STATUSES
-            ]
-            ranked = await self._rank_finished_sessions(round_id, all_finished)
-            total_participants = len(ranked)
             for position, (ranked_session, _, _) in enumerate(ranked, start=1):
                 if ranked_session.student_id == student_id:
                     rank = position
@@ -253,11 +263,13 @@ class ResultsService:
             for s in await self.session_repository.find_many({"roundId": round_.id}, limit=10000)
             if s.status in _FINISHED_STATUSES
         ]
-        ranked = await self._rank_finished_sessions(round_.id, sessions)
+        problems, best_submissions = await self._load_round_context(round_.id, sessions)
+        ranked = self._rank_sessions(sessions, problems, best_submissions)
+        students = await self._load_students([session.student_id for session, _, _ in ranked])
 
         entries: list[LeaderboardEntry] = []
         for position, (session, score, total_marks) in enumerate(ranked, start=1):
-            student = await self.user_repository.find_by_id(session.student_id)
+            student = students.get(session.student_id)
             entries.append(
                 LeaderboardEntry(
                     rank=position,
@@ -281,13 +293,19 @@ class ResultsService:
 
         sessions = await self.session_repository.find_many({"roundId": round_id}, limit=10000)
         finished = [s for s in sessions if s.status in _FINISHED_STATUSES]
-        ranked = await self._rank_finished_sessions(round_id, finished)
+        # Load problems/submissions from *every* session (including
+        # in-progress ones, for a live best-so-far score), not just the
+        # finished ones being ranked - an in-progress session can easily be
+        # working on a question no finished session touched yet.
+        problems, best_submissions = await self._load_round_context(round_id, sessions)
+        ranked = self._rank_sessions(finished, problems, best_submissions)
         rank_by_session_id = {session.id: position for position, (session, _, _) in enumerate(ranked, start=1)}
+        students = await self._load_students([session.student_id for session in sessions])
 
         entries: list[AdminRoundResultEntry] = []
         for session in sessions:
-            student = await self.user_repository.find_by_id(session.student_id)
-            score, total_marks, _ = await self._score_session(session)
+            student = students.get(session.student_id)
+            score, total_marks, _ = self._score_session(session, problems, best_submissions)
             entries.append(
                 AdminRoundResultEntry(
                     student_id=session.student_id,
