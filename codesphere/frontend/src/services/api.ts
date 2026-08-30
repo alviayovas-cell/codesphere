@@ -1,12 +1,14 @@
 import type {
   ActivityEventPublic,
   ActivityEventType,
+  AdminRoundResultEntry,
   AssessmentConfig,
   AutosavePublic,
   CodingRoundAdminView,
   CodingRoundSummary,
   JobEnqueuedResponse,
   JobStatusResponse,
+  LeaderboardResponse,
   LearningModule,
   LearningTopic,
   ProblemAdminView,
@@ -15,6 +17,8 @@ import type {
   ProgressSummary,
   QuestionPoolConfig,
   ResultConfig,
+  RoundResultDetail,
+  RoundResultSummary,
   RoundSessionPublic,
   SessionMonitorSummary,
   TestCaseAdminView,
@@ -470,4 +474,28 @@ export function getSessionActivity(sessionId: string): Promise<ActivityEventPubl
 
 export function unlockSession(sessionId: string): Promise<SessionMonitorSummary> {
   return request<SessionMonitorSummary>(`/admin/sessions/${sessionId}/unlock`, { method: 'POST' })
+}
+
+// -- Results and leaderboard (student-facing) ---------------------------------
+
+export function getMyResults(): Promise<RoundResultSummary[]> {
+  return request<RoundResultSummary[]>('/results')
+}
+
+export function getMyRoundResult(roundId: string): Promise<RoundResultDetail> {
+  return request<RoundResultDetail>(`/results/${roundId}`)
+}
+
+export function getRoundLeaderboard(roundId: string): Promise<LeaderboardResponse> {
+  return request<LeaderboardResponse>(`/rounds/${roundId}/leaderboard`)
+}
+
+// -- Results and leaderboard (admin) -------------------------------------------
+
+export function getAdminRoundResults(roundId: string): Promise<AdminRoundResultEntry[]> {
+  return request<AdminRoundResultEntry[]>(`/admin/rounds/${roundId}/results`)
+}
+
+export function getAdminRoundLeaderboard(roundId: string): Promise<LeaderboardResponse> {
+  return request<LeaderboardResponse>(`/admin/rounds/${roundId}/leaderboard`)
 }

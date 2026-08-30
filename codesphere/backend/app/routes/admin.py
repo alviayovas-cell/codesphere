@@ -10,6 +10,7 @@ from app.core.dependencies import (
     get_learning_topic_repository,
     get_problem_repository,
     get_round_session_repository,
+    get_submission_repository,
     get_test_case_repository,
     get_topic_progress_repository,
     get_user_repository,
@@ -24,6 +25,7 @@ from app.database.repositories.learning_repository import (
 from app.database.repositories.problem_repository import ProblemRepository, TestCaseRepository
 from app.database.repositories.progress_repository import TopicProgressRepository
 from app.database.repositories.round_session_repository import RoundSessionRepository
+from app.database.repositories.submission_repository import SubmissionRepository
 from app.database.repositories.user_repository import UserRepository
 from app.models.common import UserRole
 from app.models.user import User
@@ -31,6 +33,7 @@ from app.schemas.activity import ActivityEventPublic, SessionMonitorSummary
 from app.schemas.admin import PasswordResetResponse, StudentImportResult
 from app.schemas.auth import UserPublic, to_user_public
 from app.schemas.coding_round import CodingRoundAdminView, CodingRoundCreate, CodingRoundUpdate
+from app.schemas.results import AdminRoundResultEntry, LeaderboardResponse
 from app.schemas.learning import (
     LearningModuleCreate,
     LearningModulePublic,
@@ -65,6 +68,7 @@ from app.services.problem_service import (
     ProblemService,
     TestCaseNotFoundError,
 )
+from app.services.results_service import ResultsService
 from app.services.student_service import StudentNotFoundError, StudentService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -106,6 +110,18 @@ def _round_service(
         activity_event_repository,
         connection,
         user_repository,
+    )
+
+
+def _results_service(
+    round_repository: CodingRoundRepository = Depends(get_coding_round_repository),
+    session_repository: RoundSessionRepository = Depends(get_round_session_repository),
+    submission_repository: SubmissionRepository = Depends(get_submission_repository),
+    problem_repository: ProblemRepository = Depends(get_problem_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> ResultsService:
+    return ResultsService(
+        round_repository, session_repository, submission_repository, problem_repository, user_repository
     )
 
 
@@ -495,3 +511,32 @@ async def unlock_session(
         started_at=session.started_at,
         expires_at=session.expires_at,
     )
+
+
+@router.get("/rounds/{round_id}/results", response_model=list[AdminRoundResultEntry])
+async def get_round_results(
+    round_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: ResultsService = Depends(_results_service),
+) -> list[AdminRoundResultEntry]:
+    """Ungated - includes every session (finished or still in progress),
+    unlike the student-facing results/leaderboard endpoints which wait for
+    the round to close (or showScoreImmediately) before revealing scores."""
+    try:
+        return await service.get_admin_round_results(round_id)
+    except RoundNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/rounds/{round_id}/leaderboard", response_model=LeaderboardResponse)
+async def get_round_leaderboard_admin(
+    round_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: ResultsService = Depends(_results_service),
+) -> LeaderboardResponse:
+    """Same ranked entries students eventually see, but always available to
+    admins - even before the round's window closes."""
+    try:
+        return await service.get_round_leaderboard_admin(round_id)
+    except RoundNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

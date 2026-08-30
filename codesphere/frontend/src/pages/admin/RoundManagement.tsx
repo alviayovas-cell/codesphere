@@ -1,15 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as api from '../../services/api'
 import { ApiError } from '../../services/api'
-import type { CodingRoundAdminView, ProblemSummary } from '../../types'
+import type { AdminRoundResultEntry, CodingRoundAdminView, ProblemSummary } from '../../types'
 import PageHeader from '../../components/layout/PageHeader'
 import Button from '../../components/ui/Button'
 import { Input, Textarea } from '../../components/ui/Field'
-import { RoundStatusBadge } from '../../components/ui/Badge'
+import { RoundStatusBadge, SessionStatusBadge } from '../../components/ui/Badge'
+import { Table, Tbody, Td, Th, Thead, Tr } from '../../components/ui/Table'
+import Modal from '../../components/ui/Modal'
 import { InlineError } from '../../components/ui/ErrorState'
 import EmptyState from '../../components/ui/EmptyState'
-import { SkeletonCard } from '../../components/ui/Skeleton'
+import { SkeletonCard, SkeletonText } from '../../components/ui/Skeleton'
 import { ClockIcon } from '../../components/ui/Icons'
+
+function formatDateTime(iso: string | null) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+}
 
 interface FormState {
   title: string
@@ -49,6 +56,10 @@ export default function RoundManagement() {
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [showForm, setShowForm] = useState(false)
+
+  const [resultsRound, setResultsRound] = useState<CodingRoundAdminView | null>(null)
+  const [roundResults, setRoundResults] = useState<AdminRoundResultEntry[] | null>(null)
+  const [resultsError, setResultsError] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setError(null)
@@ -102,6 +113,18 @@ export default function RoundManagement() {
       load()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update round.')
+    }
+  }
+
+  async function openResults(round: CodingRoundAdminView) {
+    setResultsRound(round)
+    setRoundResults(null)
+    setResultsError(null)
+    try {
+      const entries = await api.getAdminRoundResults(round.id)
+      setRoundResults(entries)
+    } catch (err) {
+      setResultsError(err instanceof ApiError ? err.message : 'Failed to load results.')
     }
   }
 
@@ -241,6 +264,11 @@ export default function RoundManagement() {
               <Button variant="secondary" size="sm" onClick={() => handlePublishToggle(round)}>
                 {round.status === 'draft' ? 'Publish' : 'Unpublish'}
               </Button>
+              {round.status !== 'draft' && (
+                <Button variant="secondary" size="sm" onClick={() => openResults(round)}>
+                  Results
+                </Button>
+              )}
               <Button variant="ghost" size="sm" className="text-red-600 dark:text-red-400" onClick={() => handleDelete(round.id)}>
                 Delete
               </Button>
@@ -248,6 +276,52 @@ export default function RoundManagement() {
           </div>
         ))}
       </div>
+
+      <Modal
+        open={resultsRound !== null}
+        onClose={() => setResultsRound(null)}
+        title={resultsRound ? `Results — ${resultsRound.title}` : 'Results'}
+        footer={<Button variant="primary" onClick={() => setResultsRound(null)}>Close</Button>}
+      >
+        {resultsError && <InlineError message={resultsError} />}
+        {!resultsError && roundResults === null && <SkeletonText lines={4} />}
+        {!resultsError && roundResults !== null && roundResults.length === 0 && (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">No students have started this round yet.</p>
+        )}
+        {!resultsError && roundResults !== null && roundResults.length > 0 && (
+          <div className="max-h-96 overflow-y-auto">
+            <Table>
+              <Thead>
+                <Th>Rank</Th>
+                <Th>Student</Th>
+                <Th>Status</Th>
+                <Th>Score</Th>
+                <Th>Completed</Th>
+              </Thead>
+              <Tbody>
+                {roundResults.map((entry) => (
+                  <Tr key={entry.studentId}>
+                    <Td>{entry.rank ?? '—'}</Td>
+                    <Td className="font-medium text-zinc-900 dark:text-white">
+                      {entry.studentName}
+                      <span className="ml-1.5 text-xs font-normal text-zinc-400 dark:text-zinc-500">
+                        {entry.studentRegisterNumber}
+                      </span>
+                    </Td>
+                    <Td>
+                      <SessionStatusBadge status={entry.status} />
+                    </Td>
+                    <Td>
+                      {entry.score} / {entry.totalMarks}
+                    </Td>
+                    <Td className="text-zinc-500 dark:text-zinc-400">{formatDateTime(entry.completedAt)}</Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

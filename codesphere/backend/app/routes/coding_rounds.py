@@ -8,16 +8,21 @@ from app.core.dependencies import (
     get_current_user,
     get_problem_repository,
     get_round_session_repository,
+    get_submission_repository,
+    get_user_repository,
 )
 from app.database.repositories.activity_event_repository import ActivityEventRepository
 from app.database.repositories.autosave_repository import AutosaveRepository
 from app.database.repositories.coding_round_repository import CodingRoundRepository
 from app.database.repositories.problem_repository import ProblemRepository
 from app.database.repositories.round_session_repository import RoundSessionRepository
+from app.database.repositories.submission_repository import SubmissionRepository
+from app.database.repositories.user_repository import UserRepository
 from app.models.user import User
 from app.schemas.activity import ActivityEventCreate
 from app.schemas.autosave import AutosavePublic, AutosaveRequest
 from app.schemas.coding_round import CodingRoundSummary, RoundSessionPublic
+from app.schemas.results import LeaderboardResponse
 from app.services.coding_round_service import (
     CodingRoundService,
     RoundNotAvailableError,
@@ -25,6 +30,7 @@ from app.services.coding_round_service import (
     SessionNotActiveError,
     SessionNotFoundError,
 )
+from app.services.results_service import ResultsService
 from app.workers.queue_config import get_redis_connection
 
 router = APIRouter(prefix="/rounds", tags=["rounds"])
@@ -49,6 +55,18 @@ def _service(
         autosave_repository,
         activity_event_repository,
         connection,
+    )
+
+
+def _results_service(
+    round_repository: CodingRoundRepository = Depends(get_coding_round_repository),
+    session_repository: RoundSessionRepository = Depends(get_round_session_repository),
+    submission_repository: SubmissionRepository = Depends(get_submission_repository),
+    problem_repository: ProblemRepository = Depends(get_problem_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> ResultsService:
+    return ResultsService(
+        round_repository, session_repository, submission_repository, problem_repository, user_repository
     )
 
 
@@ -151,3 +169,15 @@ async def record_activity(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return await service.to_session_public(session)
+
+
+@router.get("/{round_id}/leaderboard", response_model=LeaderboardResponse)
+async def get_round_leaderboard(
+    round_id: str,
+    current_user: User = Depends(get_current_user),
+    service: ResultsService = Depends(_results_service),
+) -> LeaderboardResponse:
+    try:
+        return await service.get_round_leaderboard(round_id, current_user.id)
+    except RoundNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

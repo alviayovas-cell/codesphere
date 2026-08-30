@@ -275,7 +275,10 @@ class CodingRoundService:
         if session.status != SessionStatus.ACTIVE:
             raise SessionNotActiveError("This session cannot be submitted")
 
-        updated = await self.session_repository.update_one(session.id, {"status": SessionStatus.SUBMITTED.value})
+        updated = await self.session_repository.update_one(
+            session.id,
+            {"status": SessionStatus.SUBMITTED.value, "completedAt": datetime.now(timezone.utc)},
+        )
         return updated
 
     async def assert_can_submit(self, round_id: str, student_id: str, problem_id: str) -> RoundSession:
@@ -391,7 +394,10 @@ class CodingRoundService:
                 meta={"student_id": session.student_id},
             )
 
-        updated = await self.session_repository.update_one(session.id, {"status": target_status.value})
+        updated = await self.session_repository.update_one(
+            session.id,
+            {"status": target_status.value, "completedAt": datetime.now(timezone.utc)},
+        )
 
         await self.activity_event_repository.insert_one(
             ActivityEvent(
@@ -450,7 +456,7 @@ class CodingRoundService:
 
         updated = await self.session_repository.update_one(
             session_id,
-            {"status": SessionStatus.ACTIVE.value, "violationCount": 0, "expiresAt": new_expiry},
+            {"status": SessionStatus.ACTIVE.value, "violationCount": 0, "expiresAt": new_expiry, "completedAt": None},
         )
 
         await self.activity_event_repository.insert_one(

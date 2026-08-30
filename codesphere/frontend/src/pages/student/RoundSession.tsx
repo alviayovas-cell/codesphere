@@ -147,6 +147,12 @@ export default function RoundSession() {
         </Button>
       )}
 
+      {!isActive && (
+        <Button variant="secondary" onClick={() => navigate('/student/results')} className="mt-6">
+          View Results
+        </Button>
+      )}
+
       <Modal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}

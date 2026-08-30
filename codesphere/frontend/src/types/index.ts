@@ -244,3 +244,59 @@ export interface SessionMonitorSummary {
   startedAt: string
   expiresAt: string
 }
+
+export interface QuestionResultPublic {
+  problemId: string
+  title: string
+  difficulty: Difficulty
+  marks: number
+  attempted: boolean
+  verdict: Verdict | null
+  score: number
+  passedTests: number
+  totalTests: number
+}
+
+export interface RoundResultSummary {
+  roundId: string
+  roundTitle: string
+  status: SessionStatus
+  completedAt: string | null
+  totalMarks: number
+  resultsAvailable: boolean
+  score: number | null
+  rank: number | null
+  totalParticipants: number | null
+}
+
+export interface RoundResultDetail extends RoundResultSummary {
+  questions: QuestionResultPublic[] | null
+}
+
+export interface LeaderboardEntry {
+  rank: number
+  studentId: string
+  studentName: string
+  studentRegisterNumber: string
+  score: number
+  totalMarks: number
+  completedAt: string
+  isYou: boolean
+}
+
+export interface LeaderboardResponse {
+  resultsAvailable: boolean
+  entries: LeaderboardEntry[]
+}
+
+export interface AdminRoundResultEntry {
+  studentId: string
+  studentName: string
+  studentRegisterNumber: string
+  status: SessionStatus
+  score: number
+  totalMarks: number
+  rank: number | null
+  violationCount: number
+  completedAt: string | null
+}

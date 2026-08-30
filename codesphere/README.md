@@ -25,6 +25,7 @@ codesphere/
 **Phase 8: Coding Round System** — complete.
 **Phase 9: Smart Question Randomization** — complete.
 **Phase 10: Autosave and Assessment Monitoring** — complete.
+**Phase 11: Results and Leaderboard** — complete.
 
 Implemented so far:
 - Frontend scaffold (React + TypeScript + Vite + Tailwind CSS + React Router) with placeholder pages.
@@ -75,7 +76,15 @@ Implemented so far:
 - **Admin override** (spec section 18): `/admin/monitoring` — pick a round, see every student's session (name, register number, status, violation count, start/expiry time), open a chronological activity log per session (every visibility/focus event, warnings, and the auto-submit event itself), and **Unlock** a `locked`/`expired` session — resets violations to 0, gives a fresh expiry window (`min(now + durationMinutes, round.endTime)`), and logs the override as its own activity event so there's an audit trail of who got a manual restart and when.
 - Frontend: a "Before you start" warning modal now appears on `/student/rounds` before a round actually begins (spec: "show a clear assessment warning before they start") — explains the timer can't be paused, that focus loss is monitored and penalized, and that code autosaves. `ProblemDetail` (round mode) shows a clear, non-alarming explanation for each locked reason (`submitted` / `expired` / `locked`) instead of a generic status string, and "Back to round" now flushes a final autosave before navigating away.
 
-Everything else described in the project specification (Results and Leaderboard, etc.) is **not yet implemented** and will be added in later phases.
+- **Results** (spec section 19, `GET /api/results`, `GET /api/results/{roundId}`): once a student's session for a round is submitted/expired/locked, it shows up on their `/student/results` page with a status, total marks, and (once available) their score, rank, and a per-question breakdown - which problem, its difficulty, the verdict and score of their *best* graded attempt (Run Code submissions never count, and a later-but-worse Submit doesn't overwrite an earlier better one). Clicking a row opens the full breakdown in a modal.
+- **Results availability policy**: a student can always see that they finished and how many marks a round was worth, but their actual score is withheld until either the round's time window has fully closed, or the admin explicitly turned on `resultConfiguration.showScoreImmediately` for that round - so an early finisher's score can't tip off students still taking the assessment.
+- **Leaderboard** (`GET /api/rounds/{roundId}/leaderboard`, `/student/leaderboard`): a round-by-round ranked table (score, marks, completion time - ties broken by who finished first), with the current student's own row highlighted. Unlike a student's own result, the leaderboard *always* waits for the round to fully close, regardless of `showScoreImmediately` - it reveals other students' standing, which is a stronger thing to gate than your own pending score.
+- **Ranking**: computed by summing each assigned question's best graded-submission score, sorted score-descending / completion-time-ascending; rank is a plain 1st/2nd/3rd position (no shared ranks on ties - the earlier finisher wins).
+- **Admin results** (`GET /api/admin/rounds/{roundId}/results`, `GET /api/admin/rounds/{roundId}/leaderboard`): the same computation, but ungated (always visible, even mid-round) and includes every session regardless of status - a student who's still actively working shows up with their live best-so-far score and no rank yet, not just the ones who've finished. Surfaced in `/admin/rounds` as a "Results" button per published round.
+- A `RoundSession` now records `completedAt` the moment it first leaves `ACTIVE` (finished, expired, or auto-submit-locked) - used for leaderboard/result ordering and tie-breaking, and cleared again if an admin unlocks a session for a fresh attempt.
+- Frontend: `/student/rounds/:id`'s hub page gained a "View Results" button once the round is no longer active.
+
+Everything else described in the project specification (admin analytics/weak-topic detection, multi-language support, etc.) is **not yet implemented** and will be added in later phases.
 
 ## Prerequisites
 
@@ -337,3 +346,22 @@ This creates the 10 named DS01-DS10 problems from the spec, each with 2 public a
 - A failed autosave or activity report is deliberately swallowed on the frontend (logged nowhere, just silently retried on the next interval/event) rather than shown as an error to the student — the intent is that a flaky network blip during a timed assessment shouldn't panic or distract the student; the next successful autosave/heartbeat catches things up. The tradeoff is that a student on a badly broken connection gets no explicit warning that their autosaves aren't landing, beyond the periodic nature of the mechanism itself.
 - The admin Monitoring page's round dropdown lists **all** rounds (draft and published, any time window), not just currently-active ones — reasonable for reviewing a round after the fact, but there's no dedicated "currently in progress" filter yet.
 - Grace period and violation limits are configured only via the API/`/docs` right now (`assessmentConfiguration` on `PUT /api/admin/rounds/{id}`) — same gap noted in Phase 8's limitations, still not surfaced in the admin round creation form. Worth adding alongside the pool-configuration fields Phase 9 already added there.
+
+## Testing Phase 11
+
+1. Start backend, worker, and frontend. As admin, publish a round with 2+ problems (different mark values make this easier to verify), and set its `endTime` a few minutes out via `/docs` (`PUT /api/admin/rounds/{id}`) so you can watch it close during testing.
+2. Log in as 2-3 different students, start the round, submit varying-quality solutions to each question (including a deliberately wrong one, to see a non-`accepted` verdict), then click "Finish Round" for each.
+3. While the round is still open, visit `/student/results` as one of the finished students — the round should appear with a status badge and its total marks, but the score column should read "Pending" (not yet available).
+4. Visit `/student/leaderboard`, select the round — it should show "Leaderboard not available yet."
+5. Wait for (or shorten) the round's `endTime` to pass, then refresh `/student/results` — the score, rank, and "View Breakdown" should now be populated; open the breakdown modal and confirm each question shows the right verdict/score/marks.
+6. Refresh `/student/leaderboard` — confirm students are ranked score-descending, your own row is highlighted, and the ranking matches what you'd expect from the submissions in step 2.
+7. As admin, go to `/admin/rounds`, click "Results" on the published round — confirm the same ranked table appears (this view should have worked even in step 3-4, before the round closed, since admin results are ungated).
+8. From `/student/rounds/:id` after finishing, confirm the new "View Results" button takes you to `/student/results`.
+
+## Known Limitations (Phase 11)
+
+- **No real MongoDB was available in this environment** (same as prior phases). The scoring, ranking, and availability-gating logic was verified with 30 checks against an in-memory Mongo mock: best-attempt-wins scoring (ignoring Run submissions and worse Submit attempts), correct per-round and per-question totals, rank/tie-break ordering, the before/after-round-close availability gate for a student's own results, the stricter always-after-close gate for the leaderboard, `showScoreImmediately` correctly unlocking only the personal view (never the leaderboard), and the ungated admin view including in-progress sessions. **Not** verified against real MongoDB Atlas, real Judge0-graded submissions in this exact flow (Judge0 grading itself was already proven end-to-end in Phases 6-10; this phase's checks insert `Submission` records directly to isolate the new scoring/ranking logic), or through an actual browser session — please run through the steps above yourself.
+- Scoring sums each assigned question's *best* graded submission, not the last one — this rewards experimentation (matches most competitive-programming judges) but means a student who submits a worse "final" answer after a better earlier one still gets credit for the better one. If a stricter "your last submission is your answer" policy is wanted later, this is a one-line change in `ResultsService._best_submission_score`.
+- Rank is a plain sequential position (1st/2nd/3rd, ties broken by whoever finished first) rather than shared/"1224"-style ranking — simplest to reason about at club scale, but two students with an identical score and identical completion timestamp (down to the microsecond) would get an arbitrary stable order rather than a genuine tie.
+- The admin round-results modal and the student leaderboard/results pages don't auto-refresh — an admin watching scores roll in during a still-open round needs to close and reopen the modal to see new submissions (the underlying data is always live/ungated for admins, just not polled).
+- No cross-round aggregate/overall leaderboard yet (e.g. "total points across every round this semester") — today's leaderboard is always scoped to one round at a time, matching the per-round nature of a coding assessment; an overall standings view would be a natural follow-up if the club wants a running competition.

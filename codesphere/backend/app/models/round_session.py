@@ -14,4 +14,7 @@ class RoundSession(MongoBaseModel):
     expires_at: datetime = Field(alias="expiresAt")
     status: SessionStatus = SessionStatus.NOT_STARTED
     violation_count: int = Field(default=0, alias="violationCount")
+    # Set once the session first leaves ACTIVE (submitted / expired / locked)
+    # - used for results/leaderboard ordering and "when did you finish".
+    completed_at: datetime | None = Field(default=None, alias="completedAt")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), alias="createdAt")
