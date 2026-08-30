@@ -2,6 +2,7 @@ import type {
   ActivityEventPublic,
   ActivityEventType,
   AdminRoundResultEntry,
+  AnalyticsOverview,
   AssessmentConfig,
   AutosavePublic,
   CodingRoundAdminView,
@@ -498,4 +499,10 @@ export function getAdminRoundResults(roundId: string): Promise<AdminRoundResultE
 
 export function getAdminRoundLeaderboard(roundId: string): Promise<LeaderboardResponse> {
   return request<LeaderboardResponse>(`/admin/rounds/${roundId}/leaderboard`)
+}
+
+// -- Analytics (admin) ----------------------------------------------------------
+
+export function getAnalytics(): Promise<AnalyticsOverview> {
+  return request<AnalyticsOverview>('/admin/analytics')
 }

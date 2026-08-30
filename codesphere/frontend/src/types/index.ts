@@ -300,3 +300,62 @@ export interface AdminRoundResultEntry {
   violationCount: number
   completedAt: string | null
 }
+
+export interface OverviewStats {
+  totalStudents: number
+  totalProblems: number
+  problemsAttempted: number
+  totalSubmissions: number
+  acceptedSubmissions: number
+  overallPassRate: number
+  activeRounds: number
+  totalRounds: number
+}
+
+export interface SubmissionTrendPoint {
+  date: string
+  accepted: number
+  other: number
+}
+
+export interface ProblemPerformance {
+  problemId: string
+  title: string
+  difficulty: Difficulty
+  topic: string
+  attempts: number
+  accepted: number
+  passRate: number
+  avgScore: number
+}
+
+export interface DifficultyPerformance {
+  difficulty: Difficulty
+  attempts: number
+  accepted: number
+  passRate: number
+}
+
+export interface TopicPerformance {
+  topic: string
+  attempts: number
+  accepted: number
+  passRate: number
+}
+
+export interface ModuleEngagement {
+  moduleId: string
+  title: string
+  totalTopics: number
+  studentsStarted: number
+  avgCompletionPercent: number
+}
+
+export interface AnalyticsOverview {
+  overview: OverviewStats
+  submissionTrend: SubmissionTrendPoint[]
+  difficultyBreakdown: DifficultyPerformance[]
+  topicBreakdown: TopicPerformance[]
+  problemPerformance: ProblemPerformance[]
+  learningEngagement: ModuleEngagement[]
+}

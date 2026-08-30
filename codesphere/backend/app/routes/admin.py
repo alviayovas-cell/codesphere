@@ -31,6 +31,7 @@ from app.models.common import UserRole
 from app.models.user import User
 from app.schemas.activity import ActivityEventPublic, SessionMonitorSummary
 from app.schemas.admin import PasswordResetResponse, StudentImportResult
+from app.schemas.analytics import AnalyticsOverview
 from app.schemas.auth import UserPublic, to_user_public
 from app.schemas.coding_round import CodingRoundAdminView, CodingRoundCreate, CodingRoundUpdate
 from app.schemas.results import AdminRoundResultEntry, LeaderboardResponse
@@ -50,6 +51,7 @@ from app.schemas.problem import (
     TestCaseCreate,
     TestCaseUpdate,
 )
+from app.services.analytics_service import AnalyticsService
 from app.services.coding_round_service import (
     CodingRoundService,
     InvalidRoundConfigError,
@@ -122,6 +124,26 @@ def _results_service(
 ) -> ResultsService:
     return ResultsService(
         round_repository, session_repository, submission_repository, problem_repository, user_repository
+    )
+
+
+def _analytics_service(
+    user_repository: UserRepository = Depends(get_user_repository),
+    problem_repository: ProblemRepository = Depends(get_problem_repository),
+    submission_repository: SubmissionRepository = Depends(get_submission_repository),
+    round_repository: CodingRoundRepository = Depends(get_coding_round_repository),
+    module_repository: LearningModuleRepository = Depends(get_learning_module_repository),
+    topic_repository: LearningTopicRepository = Depends(get_learning_topic_repository),
+    progress_repository: TopicProgressRepository = Depends(get_topic_progress_repository),
+) -> AnalyticsService:
+    return AnalyticsService(
+        user_repository,
+        problem_repository,
+        submission_repository,
+        round_repository,
+        module_repository,
+        topic_repository,
+        progress_repository,
     )
 
 
@@ -540,3 +562,11 @@ async def get_round_leaderboard_admin(
         return await service.get_round_leaderboard_admin(round_id)
     except RoundNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/analytics", response_model=AnalyticsOverview)
+async def get_analytics(
+    _: User = Depends(get_current_admin_user),
+    service: AnalyticsService = Depends(_analytics_service),
+) -> AnalyticsOverview:
+    return await service.get_analytics()

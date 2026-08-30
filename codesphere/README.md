@@ -26,6 +26,7 @@ codesphere/
 **Phase 9: Smart Question Randomization** — complete.
 **Phase 10: Autosave and Assessment Monitoring** — complete.
 **Phase 11: Results and Leaderboard** — complete.
+**Phase 12: Admin Analytics** — complete.
 
 Implemented so far:
 - Frontend scaffold (React + TypeScript + Vite + Tailwind CSS + React Router) with placeholder pages.
@@ -84,7 +85,11 @@ Implemented so far:
 - A `RoundSession` now records `completedAt` the moment it first leaves `ACTIVE` (finished, expired, or auto-submit-locked) - used for leaderboard/result ordering and tie-breaking, and cleared again if an admin unlocks a session for a fresh attempt.
 - Frontend: `/student/rounds/:id`'s hub page gained a "View Results" button once the round is no longer active.
 
-Everything else described in the project specification (admin analytics/weak-topic detection, multi-language support, etc.) is **not yet implemented** and will be added in later phases.
+- **Admin Analytics** (`GET /api/admin/analytics`, `/admin/analytics`): a single aggregation endpoint over the existing collections - no new persisted state, everything is computed fresh per request (fine at club scale). Covers: an overview stat-tile row (students, problems attempted vs. total, submissions, overall pass rate, active vs. total rounds); a 14-day submission trend (accepted vs. everything else, stacked bar chart); pass rate by difficulty (easy/medium/hard, fixed order); a "weakest topics" ranking by problem topic - a platform-wide, aggregate stand-in for the spec's "advanced weak-topic detection" future enhancement (not a per-student diagnostic); a full problem-performance table (attempts, accepted, pass rate, average score, most-struggled-with first); and per-module learning engagement (average topic-completion across all students, least-engaged module first).
+- Every `Submission` document is already a graded attempt by construction (Run Code never writes one - only `submit_code_job` does), so analytics needed no new filtering to exclude ungraded activity.
+- Frontend charts are hand-built (no charting library added): a small reusable `RankedBarList` (horizontal bars, single sequential hue or a per-item color, native hover detail) and a `SubmissionTrendChart` (stacked SVG bars with a hover tooltip, a "View as table" fallback, and 2-series legend) - both reuse the app's existing design tokens (primary/secondary/zinc, and the same green/amber/red difficulty colors already used by `DifficultyBadge`) rather than introducing a new palette.
+
+Everything else described in the project specification (multi-language support, AI hints, badges/streaks, email reminders, etc.) is explicitly listed as a *post-v1* future enhancement and is **not** in scope for this build.
 
 ## Prerequisites
 
@@ -365,3 +370,22 @@ This creates the 10 named DS01-DS10 problems from the spec, each with 2 public a
 - Rank is a plain sequential position (1st/2nd/3rd, ties broken by whoever finished first) rather than shared/"1224"-style ranking — simplest to reason about at club scale, but two students with an identical score and identical completion timestamp (down to the microsecond) would get an arbitrary stable order rather than a genuine tie.
 - The admin round-results modal and the student leaderboard/results pages don't auto-refresh — an admin watching scores roll in during a still-open round needs to close and reopen the modal to see new submissions (the underlying data is always live/ungated for admins, just not polled).
 - No cross-round aggregate/overall leaderboard yet (e.g. "total points across every round this semester") — today's leaderboard is always scoped to one round at a time, matching the per-round nature of a coding assessment; an overall standings view would be a natural follow-up if the club wants a running competition.
+
+## Testing Phase 12
+
+1. Start backend and frontend. Generate some data first if you haven't already: a few students, a few practice-mode Run/Submit actions across problems of different difficulties and topics, and at least one finished coding round (see Phases 6-11's testing steps).
+2. Log in as admin and visit `/admin/analytics`. Confirm the five stat tiles at the top show sensible numbers (students, problems attempted vs. total, submissions, overall pass rate, active vs. total rounds).
+3. Check the "Submissions - last 14 days" chart - hover over a bar and confirm a tooltip shows the exact accepted/other counts for that day; click "View as table" and confirm the same 14 rows are listed.
+4. Check "Pass rate by difficulty" - bars should be colored green/amber/red matching the difficulty badges used elsewhere in the app, and the counts in parentheses should add up correctly against what you submitted.
+5. Check "Weakest topics" and "Learning module engagement" - hover a bar to see the native tooltip with exact counts; confirm modules/topics with zero activity still appear (at 0%), rather than being silently dropped.
+6. Check the "Problem performance" table at the bottom - confirm every problem you've submitted to appears (untouched problems should not), sorted with the lowest pass rate first.
+7. Toggle dark mode (from the profile dropdown, per the Phase 7-8 theme system) and confirm every chart, bar, and tooltip stays legible - no invisible text, no pure-black backgrounds.
+8. Submit a few more Run/Submit attempts, refresh `/admin/analytics`, and confirm the numbers update (this page always re-fetches on load - there's no caching to invalidate).
+
+## Known Limitations (Phase 12)
+
+- **No real MongoDB was available in this environment** (same as prior phases). The aggregation logic - overview stats, the 14-day trend window and its day-bucketing, most-struggled-first problem/topic ranking, the fixed easy/medium/hard order, division-by-zero safety for untouched problems/topics/modules, and the active-vs-total round count - was verified with 26 checks against an in-memory Mongo mock. **Not** verified against real MongoDB Atlas, and the charts themselves were verified by code review against this project's own established design tokens (no charting library was added) and a clean TypeScript build, not by rendering in an actual browser - no browser automation was available in this environment either. Please run through the testing steps above yourself, in both light and dark mode.
+- Analytics recomputes everything on every request by scanning the relevant collections in full (no caching, no materialized/precomputed rollups) - entirely fine at the club's target scale (tens of students, hundreds of submissions), but the first thing to revisit if the platform ever grows well past that.
+- "Weakest topics" and the difficulty/problem pass rates are platform-wide aggregates, not a per-student diagnostic - the PRD explicitly scopes real "advanced analytics for weak-topic detection" (i.e., per-student skill-gap identification) as a *post-v1* future enhancement, not part of this build.
+- The submission trend is a fixed 14-day window with no date-range picker yet - a reasonable default for "how's the club doing lately", but not adjustable without a code change.
+- Learning engagement counts a module as "started" by a student the moment they complete its first topic - it doesn't distinguish "actively working through it" from "completed it long ago and moved on," since `topic_progress` only stores a completion timestamp, not an in-progress/viewed state.
