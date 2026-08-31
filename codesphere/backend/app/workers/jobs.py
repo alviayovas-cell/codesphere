@@ -12,17 +12,33 @@ Motor/httpx stack the FastAPI app uses elsewhere.
 """
 
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from bson import ObjectId
 from pymongo import MongoClient
+from rq import get_current_job
 
 from app.core.config import settings
 from app.models.common import SubmissionType, TestCaseVisibility, Verdict
 from app.services.judge_service import ExecutionResult, JudgeServiceError, SyncJudgeService
 
 logger = logging.getLogger(__name__)
+
+
+def _log_queue_wait(job_name: str) -> None:
+    """Logs how long this job sat in the queue before a worker picked it
+    up (enqueued_at is set by RQ itself at enqueue time; started_at isn't
+    populated on job.func_kwargs's own record yet at this point, so "now"
+    stands in for it). Requested during the Phase-14-style investigation
+    into "Run Code takes too long" - this is the metric that would show a
+    queue-priority/worker-count problem, as opposed to slow Judge0 or a
+    slow worker."""
+    job = get_current_job()
+    if job is not None and job.enqueued_at is not None:
+        queue_wait = (datetime.now(timezone.utc) - job.enqueued_at.replace(tzinfo=timezone.utc)).total_seconds()
+        logger.info("%s: queue_wait=%.3fs (job_id=%s)", job_name, queue_wait, job.id)
 
 _client: MongoClient | None = None
 
@@ -49,6 +65,9 @@ def run_code_job(student_id: str, problem_id: str, code: str, stdin: str) -> dic
     persisted. Returns a dict matching the RunCodeResult schema (camelCase
     keys, since this is read back and re-served as-is by the job-status
     endpoint)."""
+    job_start = time.perf_counter()
+    _log_queue_wait("run_code_job")
+
     db = _get_db()
     if not ObjectId.is_valid(problem_id) or db.problems.find_one({"_id": ObjectId(problem_id)}) is None:
         return {"error": "Problem not found"}
@@ -60,6 +79,7 @@ def run_code_job(student_id: str, problem_id: str, code: str, stdin: str) -> dic
         logger.error("run_code_job: Judge0 unreachable: %s", exc)
         result = _unreachable_result()
 
+    logger.info("run_code_job: total_job_time=%.3fs", time.perf_counter() - job_start)
     return {
         "verdict": result.verdict.value,
         "stdout": result.stdout,
@@ -103,6 +123,9 @@ def submit_code_job(
     CodingRoundService enqueues this job with
     submission_type=SubmissionType.AUTO_SUBMIT.value for those cases), so
     the stored Submission record reflects which one actually happened."""
+    job_start = time.perf_counter()
+    _log_queue_wait("submit_code_job")
+
     db = _get_db()
     if not ObjectId.is_valid(problem_id):
         return {"error": "Problem not found"}
@@ -160,6 +183,8 @@ def submit_code_job(
             "submittedAt": now,
         }
     )
+
+    logger.info("submit_code_job: total_job_time=%.3fs (test_cases=%d)", time.perf_counter() - job_start, total)
 
     show_results = True
     if round_id and ObjectId.is_valid(round_id):

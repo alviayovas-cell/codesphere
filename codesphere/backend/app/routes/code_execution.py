@@ -1,3 +1,6 @@
+import logging
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from redis import Redis
 from rq import Retry
@@ -36,6 +39,7 @@ from app.workers.queue_config import (
 )
 
 router = APIRouter(prefix="/code", tags=["code"])
+logger = logging.getLogger(__name__)
 
 
 def _redis() -> Redis:
@@ -62,6 +66,7 @@ async def run_code(
     round_session_repository: RoundSessionRepository = Depends(get_round_session_repository),
     connection: Redis = Depends(_redis),
 ) -> JobEnqueuedResponse:
+    request_received_at = time.perf_counter()
     problem = await problem_repository.find_by_id(payload.problem_id)
     if problem is None or (
         problem.is_assessment_only
@@ -77,6 +82,10 @@ async def run_code(
         result_ttl=settings.job_result_ttl_seconds,
         retry=Retry(max=1),
         meta={"student_id": current_user.id},
+    )
+    logger.info(
+        "run_code enqueued: job_id=%s student_id=%s enqueue_time=%.3fs",
+        job.id, current_user.id, time.perf_counter() - request_received_at,
     )
     return JobEnqueuedResponse(job_id=job.id)
 
@@ -94,6 +103,7 @@ async def submit_code(
     activity_event_repository: ActivityEventRepository = Depends(get_activity_event_repository),
     connection: Redis = Depends(_redis),
 ) -> JobEnqueuedResponse:
+    request_received_at = time.perf_counter()
     problem = await problem_repository.find_by_id(payload.problem_id)
     if problem is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem not found")
@@ -129,6 +139,10 @@ async def submit_code(
         result_ttl=settings.job_result_ttl_seconds,
         retry=Retry(max=1),
         meta={"student_id": current_user.id},
+    )
+    logger.info(
+        "submit_code enqueued: job_id=%s student_id=%s round_id=%s enqueue_time=%.3fs",
+        job.id, current_user.id, payload.round_id, time.perf_counter() - request_received_at,
     )
     return JobEnqueuedResponse(job_id=job.id)
 

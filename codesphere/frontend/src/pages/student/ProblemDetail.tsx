@@ -128,49 +128,122 @@ export default function ProblemDetail() {
     }
   }, [roundId, problemId])
 
-  // Round mode: Page Visibility API + window blur/focus monitoring (spec
-  // section 16). Every event is reported to the server, which is the sole
-  // authority on grace periods, violation counts, and auto-submit/lock -
-  // this only reflects whatever the server decides back into the UI.
+  // Round mode: Page Visibility API monitoring (spec section 16).
+  // `visibilitychange` is the sole trigger reported to the server for
+  // violation purposes - window blur/focus deliberately aren't listened to
+  // here: they fire alongside visibilitychange for the same physical tab
+  // switch (a permission prompt or devtools can also blur the window
+  // without actually leaving the tab), and reporting both would double-
+  // count one switch as two violations. The server is still the sole
+  // authority on violation counts and auto-submit/lock; this only reflects
+  // whatever it decides back into the UI - but it decides IMMEDIATELY on
+  // the hidden event now, not retroactively on return, so a switch of any
+  // length (even under a second) is recorded and warned about the instant
+  // the student comes back.
   useEffect(() => {
     if (!roundId) return
+    let graceTimer: ReturnType<typeof setTimeout> | null = null
 
-    async function report(eventType: 'visibility_hidden' | 'visibility_restored' | 'window_blur' | 'window_focus') {
+    function clearGraceTimer() {
+      if (graceTimer !== null) {
+        clearTimeout(graceTimer)
+        graceTimer = null
+      }
+    }
+
+    async function onHidden() {
       if (roundSessionRef.current?.status !== 'active') return
+      const previousCount = roundSessionRef.current.violationCount
+      const graceSeconds = roundSessionRef.current.gracePeriodSeconds
+
+      // Immediate, unconditional violation - see the module comment above.
       try {
-        const previousCount = roundSessionRef.current?.violationCount ?? 0
-        const updated = await api.recordActivity(roundId!, eventType)
+        const updated = await api.recordActivity(roundId!, 'visibility_hidden')
         setRoundSession(updated)
         if (updated.violationCount > previousCount && updated.status === 'active') {
+          // State set now, but this modal is only ever actually seen once
+          // the student returns and the tab repaints - satisfies "warn
+          // immediately on return" without needing a separate pending flag.
           setViolationWarning({ count: updated.violationCount, max: updated.maxViolations })
         }
       } catch {
         // Monitoring is a policy control, not a guarantee - don't block the student on a failed report.
       }
+
+      // Grace period governs ONLY prolonged-absence auto-submit, entirely
+      // separate from the violation recorded above. If the student is
+      // still away when this fires, the server re-verifies and decides.
+      if (graceSeconds > 0) {
+        graceTimer = setTimeout(() => {
+          if (document.visibilityState === 'hidden') {
+            api.checkProlongedAbsence(roundId!).then(setRoundSession).catch(() => {})
+          }
+        }, graceSeconds * 1000)
+      }
+    }
+
+    async function onVisible() {
+      clearGraceTimer()
+      if (roundSessionRef.current?.status !== 'active') return
+      try {
+        const updated = await api.recordActivity(roundId!, 'visibility_restored')
+        setRoundSession(updated)
+      } catch {
+        // Best-effort audit log entry - not required for correctness.
+      }
     }
 
     function onVisibilityChange() {
-      report(document.hidden ? 'visibility_hidden' : 'visibility_restored')
-    }
-    function onBlur() {
-      report('window_blur')
-    }
-    function onFocus() {
-      report('window_focus')
+      if (document.hidden) onHidden()
+      else onVisible()
     }
 
     document.addEventListener('visibilitychange', onVisibilityChange)
-    window.addEventListener('blur', onBlur)
-    window.addEventListener('focus', onFocus)
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange)
-      window.removeEventListener('blur', onBlur)
-      window.removeEventListener('focus', onFocus)
+      clearGraceTimer()
     }
   }, [roundId])
 
+  // Belt-and-suspenders duplicate-click guard: the buttons are already
+  // `disabled` while running/submitting, but that disable only takes
+  // effect after React commits the state update, leaving a brief window
+  // where a second click before re-render could still fire a second
+  // request. These refs make the guard synchronous.
+  const runInFlightRef = useRef(false)
+  const submitInFlightRef = useRef(false)
+
+  /** Maps a request error to a clear, specific message and, for a round
+   * session that turned out to no longer be active (locked/expired/
+   * submitted - e.g. an auto-submit happened while this tab sat idle),
+   * refreshes roundSession so the UI immediately reflects it (disabling
+   * the buttons, showing the right locked-reason message) instead of
+   * leaving stale state that makes a correctly-rejected request look like
+   * a silent failure. */
+  async function describeActionError(err: unknown): Promise<string> {
+    if (err instanceof ApiError) {
+      if (err.status === 401) {
+        navigate('/login')
+        return 'Your session has expired. Please log in again.'
+      }
+      if (roundId && (err.status === 409 || err.status === 404)) {
+        try {
+          setRoundSession(await api.getRoundSession(roundId))
+        } catch {
+          // Best-effort refresh - the error message below still applies either way.
+        }
+      }
+      if (err.status === 0) {
+        return 'Unable to connect to the server. Please try again.'
+      }
+      return err.message
+    }
+    return 'Something went wrong. Please try again.'
+  }
+
   async function handleRun() {
-    if (!problemId) return
+    if (!problemId || runInFlightRef.current) return
+    runInFlightRef.current = true
     setActionError(null)
     setSubmitResult(null)
     setRunResult(null)
@@ -178,9 +251,9 @@ export default function ProblemDetail() {
     setJobPhase('queued')
     try {
       const { jobId } = await api.runCode(problemId, code, stdin)
-      const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status) })
+      const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status), timeoutMs: 75000 })
       if (finalStatus.status === 'failed') {
-        setActionError(finalStatus.error ?? 'The run job failed.')
+        setActionError(finalStatus.error ?? 'Run failed. Please try again.')
         setTab('errors')
       } else {
         const result = finalStatus.result as RunCodeResult
@@ -188,16 +261,18 @@ export default function ProblemDetail() {
         setTab(result.compileOutput || result.stderr ? 'errors' : 'output')
       }
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Could not run code.')
+      setActionError(await describeActionError(err))
       setTab('errors')
     } finally {
       setRunning(false)
       setJobPhase(null)
+      runInFlightRef.current = false
     }
   }
 
   async function handleSubmit() {
-    if (!problemId) return
+    if (!problemId || submitInFlightRef.current) return
+    submitInFlightRef.current = true
     setActionError(null)
     setRunResult(null)
     setSubmitResult(null)
@@ -209,9 +284,9 @@ export default function ProblemDetail() {
     }
     try {
       const { jobId } = await api.submitCode(problemId, code, roundId)
-      const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status) })
+      const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status), timeoutMs: 145000 })
       if (finalStatus.status === 'failed') {
-        setActionError(finalStatus.error ?? 'The submit job failed.')
+        setActionError(finalStatus.error ?? 'Submission failed. Please try again.')
         setTab('errors')
       } else {
         const result = finalStatus.result as SubmitCodeResult
@@ -219,17 +294,18 @@ export default function ProblemDetail() {
         setTab(result.compileOutput ? 'errors' : 'output')
       }
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : 'Could not submit code.')
+      setActionError(await describeActionError(err))
       setTab('errors')
     } finally {
       setSubmitting(false)
       setJobPhase(null)
+      submitInFlightRef.current = false
     }
   }
 
   const jobPhaseLabel: Record<JobStatus, string> = {
     queued: 'Queued...',
-    processing: 'Executing...',
+    processing: running ? 'Running...' : 'Submitting...',
     completed: 'Done',
     failed: 'Failed',
   }

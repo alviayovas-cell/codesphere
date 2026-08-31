@@ -34,6 +34,12 @@ from app.workers.queue_config import QUEUE_AUTO_SUBMIT, get_queue
 
 _LEFT_EVENT_TYPES = [ActivityEventType.VISIBILITY_HIDDEN.value, ActivityEventType.WINDOW_BLUR.value]
 _RETURN_EVENT_TYPES = (ActivityEventType.VISIBILITY_RESTORED, ActivityEventType.WINDOW_FOCUS)
+# Only the Page Visibility API drives violation counting - window blur/focus
+# fire alongside it for the same physical tab-switch (and blur alone is
+# prone to false positives, e.g. a permission prompt stealing focus), so
+# treating both as separate triggers would double-count one switch. Both
+# event types are still accepted and logged for the audit trail.
+_VIOLATION_TRIGGER_EVENT = ActivityEventType.VISIBILITY_HIDDEN
 
 
 class RoundNotFoundError(Exception):
@@ -300,7 +306,7 @@ class CodingRoundService:
         this also completes the spec's "on expiry: auto-submit the latest
         autosaved code for every assigned question" step."""
         if session.status == SessionStatus.ACTIVE and datetime.now(timezone.utc) > session.expires_at:
-            return await self._auto_submit_and_transition(session, SessionStatus.EXPIRED)
+            return await self._auto_submit_and_transition(session, SessionStatus.EXPIRED, reason="expired")
         return session
 
     # -- autosave --------------------------------------------------------------
@@ -319,36 +325,37 @@ class CodingRoundService:
     # -- assessment monitoring ---------------------------------------------
 
     async def record_activity(self, round_id: str, student_id: str, event_type: ActivityEventType) -> RoundSession:
-        """Logs a Page Visibility / focus event, and - only while the
-        session is still active - applies the grace-period + violation
-        policy (spec section 16): a "left" event alone is never a
-        violation; only a "returned" event that arrives after the round's
-        configured grace period has elapsed counts against the student."""
+        """Logs a Page Visibility / focus event. Violation counting and the
+        grace period are two deliberately separate mechanisms:
+
+        - Every `visibility_hidden` (tab/window actually leaves view) counts
+          as a violation THE MOMENT it happens - no minimum away-duration,
+          so even a one-second switch is recorded and the student sees a
+          warning the instant they come back. This is the primary fix for
+          "the warning only appeared after staying away a while": that used
+          to be gated on the grace period at return time; it no longer is.
+        - The grace period no longer decides *whether* something counts as
+          a violation - it only bounds how long the student can stay away
+          in a single absence before auto-submit fires regardless of
+          violation count (see check_prolonged_absence, driven by a
+          client-side timer started the moment the tab is hidden).
+        `window_blur`/`window_focus` are still accepted and logged (for the
+        audit trail / secondary monitoring) but never independently trigger
+        a violation - they fire alongside visibilitychange for the same
+        physical switch, so counting both would double-count one switch."""
         session = await self.get_session(round_id, student_id)  # also applies lazy expiry
 
         await self.activity_event_repository.insert_one(
             ActivityEvent(session_id=session.id, event_type=event_type)
         )
 
-        if session.status != SessionStatus.ACTIVE or event_type not in _RETURN_EVENT_TYPES:
+        if session.status != SessionStatus.ACTIVE or event_type != _VIOLATION_TRIGGER_EVENT:
             return session
-
-        left_events = await self.activity_event_repository.find_many(
-            {"sessionId": session.id, "eventType": {"$in": _LEFT_EVENT_TYPES}}, limit=1000
-        )
-        if not left_events:
-            return session
-
-        last_left = max(left_events, key=lambda e: e.timestamp)
-        away_seconds = (datetime.now(timezone.utc) - last_left.timestamp).total_seconds()
 
         round_ = await self.round_repository.find_by_id(round_id)
         if round_ is None:
             return session
         config = round_.assessment_configuration
-
-        if away_seconds <= config.grace_period_seconds:
-            return session  # returned in time - no violation
 
         new_violation_count = session.violation_count + 1
         updated = await self.session_repository.update_one(session.id, {"violationCount": new_violation_count})
@@ -359,8 +366,7 @@ class CodingRoundService:
                 session_id=session.id,
                 event_type=ActivityEventType.WARNING,
                 metadata={
-                    "reason": "grace_period_exceeded",
-                    "awaySeconds": round(away_seconds, 1),
+                    "reason": "left_assessment_tab",
                     "violationNumber": new_violation_count,
                     "maxViolations": config.max_violations,
                 },
@@ -368,15 +374,67 @@ class CodingRoundService:
         )
 
         if new_violation_count > config.max_violations and config.auto_submit_enabled:
-            session = await self._auto_submit_and_transition(session, SessionStatus.LOCKED)
+            session = await self._auto_submit_and_transition(
+                session, SessionStatus.LOCKED, reason="violation_limit_exceeded"
+            )
 
         return session
 
-    async def _auto_submit_and_transition(self, session: RoundSession, target_status: SessionStatus) -> RoundSession:
-        """Shared by both auto-submit triggers (time expiry -> EXPIRED,
-        violation limit exceeded -> LOCKED): for each assigned question,
-        enqueue the latest autosaved code (if any) onto the auto_submit
-        priority tier, then transition the session."""
+    async def check_prolonged_absence(self, round_id: str, student_id: str) -> RoundSession:
+        """Driven by a client-side timer started the instant the tab is
+        hidden, firing `grace_period_seconds` later ONLY if the tab is
+        still hidden at that point (see the frontend's visibilitychange
+        handler). The server re-verifies independently rather than trusting
+        the client outright: if a `visibility_restored` event was logged
+        after the most recent `visibility_hidden`, the student came back in
+        time and nothing happens. Otherwise, and only if the round's policy
+        has auto-submit enabled, this locks the session exactly like
+        exceeding the violation count does - a single prolonged absence is
+        its own auto-submit trigger, independent of violation count."""
+        session = await self.get_session(round_id, student_id)
+        if session.status != SessionStatus.ACTIVE:
+            return session
+
+        round_ = await self.round_repository.find_by_id(round_id)
+        if round_ is None or not round_.assessment_configuration.auto_submit_enabled:
+            return session
+
+        events = await self.activity_event_repository.find_many(
+            {"sessionId": session.id, "eventType": {"$in": [*_LEFT_EVENT_TYPES, *[t.value for t in _RETURN_EVENT_TYPES]]}},
+            limit=1000,
+        )
+        if not events:
+            return session
+
+        last_left = max((e for e in events if e.event_type.value in _LEFT_EVENT_TYPES), key=lambda e: e.timestamp, default=None)
+        if last_left is None:
+            return session
+        returned_since = any(e.event_type in _RETURN_EVENT_TYPES and e.timestamp > last_left.timestamp for e in events)
+        if returned_since:
+            return session  # came back before the grace timer fired - nothing to do
+
+        away_seconds = (datetime.now(timezone.utc) - last_left.timestamp).total_seconds()
+        if away_seconds < round_.assessment_configuration.grace_period_seconds:
+            return session  # client timer fired early (clock drift) - not actually over yet
+
+        session = await self._auto_submit_and_transition(session, SessionStatus.LOCKED, reason="prolonged_absence")
+        await self.activity_event_repository.insert_one(
+            ActivityEvent(
+                session_id=session.id,
+                event_type=ActivityEventType.WARNING,
+                metadata={"reason": "prolonged_absence", "awaySeconds": round(away_seconds, 1)},
+            )
+        )
+        return session
+
+    async def _auto_submit_and_transition(
+        self, session: RoundSession, target_status: SessionStatus, reason: str
+    ) -> RoundSession:
+        """Shared by every auto-submit trigger (time expiry, violation
+        count exceeded, a single prolonged absence past the grace period):
+        for each assigned question, enqueue the latest autosaved code (if
+        any) onto the auto_submit priority tier, then transition the
+        session."""
         for question in session.assigned_questions:
             autosave = await self.autosave_repository.find_one(
                 {"sessionId": session.id, "problemId": question.problem_id}
@@ -403,7 +461,7 @@ class CodingRoundService:
             ActivityEvent(
                 session_id=session.id,
                 event_type=ActivityEventType.AUTO_SUBMIT,
-                metadata={"reason": "expired" if target_status == SessionStatus.EXPIRED else "violation_limit_exceeded"},
+                metadata={"reason": reason},
             )
         )
 
@@ -488,4 +546,5 @@ class CodingRoundService:
             ],
             violation_count=session.violation_count,
             max_violations=round_.assessment_configuration.max_violations if round_ else 0,
+            grace_period_seconds=round_.assessment_configuration.grace_period_seconds if round_ else 0,
         )

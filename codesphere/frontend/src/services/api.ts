@@ -464,6 +464,13 @@ export function recordActivity(roundId: string, eventType: ActivityEventType): P
   })
 }
 
+/** Called by a client-side grace-period timer, only if the tab is still
+ * hidden when it fires - the server independently re-verifies before
+ * acting (see CodingRoundService.check_prolonged_absence). */
+export function checkProlongedAbsence(roundId: string): Promise<RoundSessionPublic> {
+  return request<RoundSessionPublic>(`/rounds/${roundId}/prolonged-absence-check`, { method: 'POST' })
+}
+
 // -- Assessment monitoring (admin) -------------------------------------------
 
 export function listRoundSessions(roundId: string): Promise<SessionMonitorSummary[]> {

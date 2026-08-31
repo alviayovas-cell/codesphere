@@ -171,6 +171,25 @@ async def record_activity(
     return await service.to_session_public(session)
 
 
+@router.post("/{round_id}/prolonged-absence-check", response_model=RoundSessionPublic)
+async def prolonged_absence_check(
+    round_id: str,
+    current_user: User = Depends(get_current_user),
+    service: CodingRoundService = Depends(_service),
+) -> RoundSessionPublic:
+    """Called by a client-side timer started the instant the tab is hidden,
+    firing once the round's grace period elapses IF the tab is still
+    hidden at that point. The server independently re-verifies the student
+    hasn't actually returned before acting - see
+    CodingRoundService.check_prolonged_absence."""
+    try:
+        session = await service.check_prolonged_absence(round_id, current_user.id)
+    except SessionNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return await service.to_session_public(session)
+
+
 @router.get("/{round_id}/leaderboard", response_model=LeaderboardResponse)
 async def get_round_leaderboard(
     round_id: str,

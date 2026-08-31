@@ -34,8 +34,16 @@ class Settings(BaseSettings):
     submit_rate_limit_per_minute: int = 3
 
     redis_url: str = "redis://localhost:6379/0"
-    run_job_timeout_seconds: int = 45
-    submit_job_timeout_seconds: int = 120
+    # These must comfortably exceed SyncJudgeService.execute's own worst-case
+    # retry budget (judge0_request_timeout_seconds * 2 attempts + a short
+    # sleep between them, ~61s at the defaults above) - otherwise RQ kills
+    # the job mid-retry before JudgeService even gives up on its own,
+    # turning a slow-but-recoverable Judge0 response into a hard failure.
+    # Submit additionally runs the first test case sequentially (to short-
+    # circuit on a compile error) before the rest in parallel, so its
+    # worst case is roughly double a single call's.
+    run_job_timeout_seconds: int = 70
+    submit_job_timeout_seconds: int = 140
     job_result_ttl_seconds: int = 3600
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

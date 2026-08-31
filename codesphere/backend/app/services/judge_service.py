@@ -138,6 +138,29 @@ class JudgeService:
         )
 
 
+_shared_sync_client: httpx.Client | None = None
+
+
+def _get_shared_sync_client() -> httpx.Client:
+    """One pooled, keep-alive httpx.Client shared by every SyncJudgeService
+    call in this worker process, instead of opening (and TLS-handshaking)
+    a brand-new connection for every single test case. A worker process
+    lives for its whole lifetime processing many jobs - each with up to 8
+    test cases dispatched concurrently via ThreadPoolExecutor
+    (submit_code_job) - so connection reuse across all of that is a real,
+    measurable win, not a micro-optimization: TLS handshakes to a public
+    internet host commonly cost 100-300ms+ each, on top of whatever Judge0
+    itself takes to compile and run the submission. httpx.Client is
+    documented as thread-safe, so sharing it across the thread pool is safe.
+    Found during Phase-14-style load-testing of "Run Code takes too long"."""
+    global _shared_sync_client
+    if _shared_sync_client is None:
+        _shared_sync_client = httpx.Client(
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=20)
+        )
+    return _shared_sync_client
+
+
 class SyncJudgeService:
     """Synchronous twin of JudgeService, for use inside RQ worker jobs.
 
@@ -171,7 +194,7 @@ class SyncJudgeService:
         return headers
 
     def execute(
-        self, source_code: str, stdin: str = "", expected_output: str | None = None, max_retries: int = 2
+        self, source_code: str, stdin: str = "", expected_output: str | None = None, max_retries: int = 1
     ) -> ExecutionResult:
         payload = {
             "source_code": _b64(source_code),
@@ -181,25 +204,38 @@ class SyncJudgeService:
         if expected_output is not None:
             payload["expected_output"] = _b64(expected_output)
 
+        client = _get_shared_sync_client()
         last_error: Exception | None = None
+        overall_start = time.perf_counter()
         for attempt in range(max_retries + 1):
+            attempt_start = time.perf_counter()
             try:
-                with httpx.Client(timeout=self.timeout_seconds) as client:
-                    response = client.post(
-                        f"{self.api_url}/submissions",
-                        params={"base64_encoded": "true", "wait": "true"},
-                        json=payload,
-                        headers=self._headers(),
-                    )
+                response = client.post(
+                    f"{self.api_url}/submissions",
+                    params={"base64_encoded": "true", "wait": "true"},
+                    json=payload,
+                    headers=self._headers(),
+                    timeout=self.timeout_seconds,
+                )
                 response.raise_for_status()
+                logger.info(
+                    "Judge0 call completed: attempt=%d judge0_time=%.2fs total_time=%.2fs",
+                    attempt + 1,
+                    time.perf_counter() - attempt_start,
+                    time.perf_counter() - overall_start,
+                )
                 return JudgeService._parse(response.json())
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 last_error = exc
-                logger.warning("Judge0 request failed (attempt %d/%d): %s", attempt + 1, max_retries + 1, exc)
+                logger.warning(
+                    "Judge0 request failed (attempt %d/%d) after %.2fs: %s",
+                    attempt + 1, max_retries + 1, time.perf_counter() - attempt_start, exc,
+                )
                 if attempt < max_retries:
                     time.sleep(0.5 * (attempt + 1))
             except httpx.HTTPStatusError as exc:
                 logger.error("Judge0 returned an error status: %s", exc)
                 raise JudgeServiceError(f"Judge0 request failed: {exc}") from exc
 
+        logger.error("Judge0 unreachable after %.2fs total: %s", time.perf_counter() - overall_start, last_error)
         raise JudgeServiceError(f"Judge0 is unreachable after {max_retries + 1} attempts: {last_error}")

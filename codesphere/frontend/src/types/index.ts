@@ -211,6 +211,7 @@ export interface RoundSessionPublic {
   assignedQuestions: AssignedQuestion[]
   violationCount: number
   maxViolations: number
+  gracePeriodSeconds: number
 }
 
 export interface AutosavePublic {
