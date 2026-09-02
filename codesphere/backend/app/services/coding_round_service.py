@@ -342,11 +342,34 @@ class CodingRoundService:
         `window_blur`/`window_focus` are still accepted and logged (for the
         audit trail / secondary monitoring) but never independently trigger
         a violation - they fire alongside visibilitychange for the same
-        physical switch, so counting both would double-count one switch."""
+        physical switch, so counting both would double-count one switch.
+
+        hiddenAt/visibleAt/durationMs are computed here from the server's
+        own event timestamps (never trusted from the client, same as
+        violation counts) and stored on the event's metadata: for a
+        left-type event, hiddenAt is just this event's own timestamp; for a
+        return-type event, it's looked up from the most recent left event
+        so the round trip's duration is recorded even for a ~100ms switch."""
         session = await self.get_session(round_id, student_id)  # also applies lazy expiry
+        now = datetime.now(timezone.utc)
+
+        metadata: dict = {}
+        if event_type.value in _LEFT_EVENT_TYPES:
+            metadata = {"hiddenAt": now.isoformat()}
+        elif event_type in _RETURN_EVENT_TYPES:
+            left_events = await self.activity_event_repository.find_many(
+                {"sessionId": session.id, "eventType": {"$in": _LEFT_EVENT_TYPES}}, limit=1000
+            )
+            if left_events:
+                last_left = max(left_events, key=lambda e: e.timestamp)
+                metadata = {
+                    "hiddenAt": last_left.timestamp.isoformat(),
+                    "visibleAt": now.isoformat(),
+                    "durationMs": round((now - last_left.timestamp).total_seconds() * 1000),
+                }
 
         await self.activity_event_repository.insert_one(
-            ActivityEvent(session_id=session.id, event_type=event_type)
+            ActivityEvent(session_id=session.id, event_type=event_type, timestamp=now, metadata=metadata)
         )
 
         if session.status != SessionStatus.ACTIVE or event_type != _VIOLATION_TRIGGER_EVENT:

@@ -144,6 +144,16 @@ export default function ProblemDetail() {
     if (!roundId) return
     let graceTimer: ReturnType<typeof setTimeout> | null = null
 
+    // Explicit state machine (ACTIVE -> TAB_HIDDEN -> POTENTIAL_VIOLATION ->
+    // TAB_VISIBLE -> WARNING_SHOWN -> ACTIVE), tracked synchronously so a
+    // second visibilitychange firing before the first one's network
+    // round-trip resolves can't send a duplicate report for the same
+    // continuous hidden period - the actual detection instant is the
+    // `visibilitychange` callback invocation itself (synchronous with the
+    // browser event, no artificial delay), not anything network-bound.
+    type TabState = 'active' | 'tab_hidden' | 'tab_visible'
+    let tabState: TabState = 'active'
+
     function clearGraceTimer() {
       if (graceTimer !== null) {
         clearTimeout(graceTimer)
@@ -152,11 +162,15 @@ export default function ProblemDetail() {
     }
 
     async function onHidden() {
+      if (tabState === 'tab_hidden') return // already recorded this hidden period - ignore a duplicate event
+      tabState = 'tab_hidden' // -> POTENTIAL_VIOLATION
       if (roundSessionRef.current?.status !== 'active') return
       const previousCount = roundSessionRef.current.violationCount
       const graceSeconds = roundSessionRef.current.gracePeriodSeconds
 
       // Immediate, unconditional violation - see the module comment above.
+      // Exactly one request for this hidden period; nothing repeats while
+      // the tab stays hidden (no polling).
       try {
         const updated = await api.recordActivity(roundId!, 'visibility_hidden')
         setRoundSession(updated)
@@ -184,16 +198,24 @@ export default function ProblemDetail() {
 
     async function onVisible() {
       clearGraceTimer()
-      if (roundSessionRef.current?.status !== 'active') return
-      try {
-        const updated = await api.recordActivity(roundId!, 'visibility_restored')
-        setRoundSession(updated)
-      } catch {
-        // Best-effort audit log entry - not required for correctness.
+      if (tabState !== 'tab_hidden') return // nothing to close out - ignore a duplicate/spurious event
+      tabState = 'tab_visible' // -> WARNING_SHOWN (the warning, if any, is already queued from onHidden)
+      if (roundSessionRef.current?.status === 'active') {
+        try {
+          const updated = await api.recordActivity(roundId!, 'visibility_restored')
+          setRoundSession(updated)
+        } catch {
+          // Best-effort audit log entry (records visibleAt/durationMs) - not required for correctness.
+        }
       }
+      tabState = 'active' // -> ACTIVE, ready for the next switch
     }
 
     function onVisibilityChange() {
+      // Page Visibility API is the sole detection mechanism - the browser
+      // delivers this event as soon as it changes the document's
+      // visibility state, so the callback below runs at that instant, not
+      // after any timeout.
       if (document.hidden) onHidden()
       else onVisible()
     }
