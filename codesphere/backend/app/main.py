@@ -20,6 +20,7 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$" if settings.environment == "development" else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,6 +34,11 @@ app.include_router(problems.router, prefix="/api")
 app.include_router(code_execution.router, prefix="/api")
 app.include_router(coding_rounds.router, prefix="/api")
 app.include_router(results.router, prefix="/api")
+
+
+@app.get("/health")
+def health_check() -> dict[str, str]:
+    return {"status": "ok"}
 
 
 @app.get("/")

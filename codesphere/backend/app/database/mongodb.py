@@ -37,7 +37,7 @@ async def connect_to_mongo() -> None:
     # TypeError. Round/session expiry logic (Phase 8+) depends on comparing
     # "now" against DB-loaded timestamps, so this must be set from the start.
     mongodb.client = AsyncIOMotorClient(
-        settings.mongodb_uri, serverSelectionTimeoutMS=5000, tz_aware=True
+        settings.mongodb_uri, serverSelectionTimeoutMS=15000, tz_aware=True
     )
     mongodb.database = mongodb.client[settings.mongodb_db_name]
     try:

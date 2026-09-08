@@ -1,3 +1,7 @@
+import json
+from typing import Any
+
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Shipped in source (and in .env.example) as an obvious, documented dev-only
@@ -11,20 +15,34 @@ INSECURE_DEFAULT_JWT_SECRET = "dev-only-insecure-secret-change-me-in-production"
 class Settings(BaseSettings):
     app_name: str = "CodeSphere API"
     environment: str = "development"
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] | str = ["http://localhost:5173"]
 
     mongodb_uri: str = "mongodb://localhost:27017"
-    mongodb_db_name: str = "codesphere"
+    mongodb_db_name: str = Field(
+        default="codesphere",
+        validation_alias=AliasChoices("MONGODB_DB_NAME", "MONGODB_DATABASE", "mongodb_db_name"),
+    )
 
-    jwt_secret_key: str = INSECURE_DEFAULT_JWT_SECRET
+    jwt_secret_key: str = Field(
+        default=INSECURE_DEFAULT_JWT_SECRET,
+        validation_alias=AliasChoices("JWT_SECRET_KEY", "JWT_SECRET", "jwt_secret_key"),
+    )
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 720
+    jwt_access_token_expire_minutes: int = Field(
+        default=720,
+        validation_alias=AliasChoices(
+            "JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "JWT_EXPIRE_MINUTES", "jwt_access_token_expire_minutes"
+        ),
+    )
 
     # Defaults to the free public Judge0 CE demo instance (ce.judge0.com) so the
     # app works out of the box in development. It is rate-limited and NOT
     # suitable for a real coding event - use a self-hosted or RapidAPI-hosted
     # Judge0 instance in production (see TTD section 9/12).
-    judge0_api_url: str = "https://ce.judge0.com"
+    judge0_api_url: str = Field(
+        default="https://ce.judge0.com",
+        validation_alias=AliasChoices("JUDGE0_API_URL", "JUDGE0_URL", "judge0_api_url"),
+    )
     judge0_api_key: str | None = None
     judge0_api_host: str | None = None
     judge0_c_language_id: int = 50  # C (GCC 9.2.0) on Judge0 CE
@@ -46,7 +64,27 @@ class Settings(BaseSettings):
     submit_job_timeout_seconds: int = 140
     job_result_ttl_seconds: int = 3600
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except Exception:
+                    pass
+            parts = [item.strip() for item in v.split(",") if item.strip()]
+            return parts if parts else ["http://localhost:5173"]
+        elif isinstance(v, (list, tuple, set)):
+            return [str(item).strip() for item in v if str(item).strip()]
+        return v
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", populate_by_name=True, extra="ignore"
+    )
 
     def validate_for_production(self) -> None:
         """Fail fast, before anything starts serving traffic or processing

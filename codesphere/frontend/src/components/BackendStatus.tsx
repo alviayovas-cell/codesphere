@@ -7,9 +7,23 @@ export default function BackendStatus() {
   const [status, setStatus] = useState<Status>('checking')
 
   useEffect(() => {
-    getHealth()
-      .then(() => setStatus('online'))
-      .catch(() => setStatus('offline'))
+    let mounted = true
+    const check = () => {
+      getHealth()
+        .then(() => {
+          if (mounted) setStatus('online')
+        })
+        .catch(() => {
+          if (mounted) setStatus('offline')
+        })
+    }
+
+    check()
+    const interval = setInterval(check, 3000)
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
   }, [])
 
   const dot =
