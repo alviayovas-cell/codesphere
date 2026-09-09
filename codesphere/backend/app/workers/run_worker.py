@@ -16,6 +16,7 @@ import logging
 import sys
 import threading
 
+from rq.timeouts import TimerDeathPenalty
 from rq.worker import SimpleWorker, Worker
 
 from app.workers.queue_config import QUEUE_NAMES_BY_PRIORITY, get_redis_connection
@@ -58,6 +59,19 @@ def start_inline_worker_thread() -> threading.Thread:
     time stay held forever in the child, which can deadlock. SimpleWorker
     runs jobs in-thread with no fork, which is the safe choice here
     regardless of OS.
+
+    Two separate places in RQ reach for POSIX signals, which only work in
+    a process's *main* thread - both had to be disabled for a background
+    thread to work at all (found by actually deploying this and hitting
+    each one in turn, not by reading RQ's source up front):
+      1. Worker.work() installs SIGINT/SIGTERM handlers for graceful
+         shutdown on Ctrl+C - irrelevant here, this thread just ends
+         when the process does, so it's disabled outright.
+      2. Every job's timeout enforcement ("death penalty") defaults to
+         SIGALRM-based killing. Swapped for RQ's own TimerDeathPenalty,
+         which uses a threading.Timer instead - the documented
+         alternative for platforms/contexts without SIGALRM (Windows is
+         RQ's usual example; a non-main thread is the same constraint).
     """
     connection = get_redis_connection()
     connection.ping()
@@ -65,11 +79,8 @@ def start_inline_worker_thread() -> threading.Thread:
 
     def _run() -> None:
         worker = SimpleWorker(QUEUE_NAMES_BY_PRIORITY, connection=connection)
-        # RQ installs SIGINT/SIGTERM handlers by default, which only works
-        # in the main thread of the main interpreter - this runs in a
-        # background thread, so skip it. There's no CLI signal to catch
-        # here anyway: this daemon thread just ends when the process does.
         worker._install_signal_handlers = lambda: None
+        worker.death_penalty_class = TimerDeathPenalty
         worker.work(with_scheduler=False)
 
     thread = threading.Thread(target=_run, name="inline-rq-worker", daemon=True)
