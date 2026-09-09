@@ -11,6 +11,10 @@ from app.routes import admin, auth, code_execution, coding_rounds, health, learn
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_to_mongo()
+    if settings.run_worker_inline:
+        from app.workers.run_worker import start_inline_worker_thread
+
+        start_inline_worker_thread()
     yield
     await close_mongo_connection()
 

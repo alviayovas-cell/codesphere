@@ -64,6 +64,13 @@ class Settings(BaseSettings):
     submit_job_timeout_seconds: int = 140
     job_result_ttl_seconds: int = 3600
 
+    # Opt-in: run the RQ worker as a background thread of this same web
+    # process instead of a separate process/service. Exists for free-tier
+    # deployments where a separate Background Worker service isn't
+    # available (e.g. Render's free plan). See
+    # app/workers/run_worker.py's start_inline_worker_thread().
+    run_worker_inline: bool = False
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Any) -> list[str]:

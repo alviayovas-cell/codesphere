@@ -1,10 +1,17 @@
 services:
   # ---------------------------------------------------------------------------
-  # 1. FastAPI Web Service (Backend)
+  # 1. FastAPI Web Service (Backend) - also runs the RQ worker inline (see
+  #    RUN_WORKER_INLINE below), since Render's free plan doesn't offer
+  #    Background Worker services at all (paid plans only). If you upgrade
+  #    later and want a real separate worker process, add a `type: worker`
+  #    service back (same build/start command pattern as this one, but
+  #    `startCommand: python -m app.workers.run_worker`) and delete/set
+  #    RUN_WORKER_INLINE to false here so jobs aren't processed twice.
   # ---------------------------------------------------------------------------
   - type: web
     name: codesphere-backend
     runtime: python
+    plan: free
     rootDir: codesphere/backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -13,6 +20,8 @@ services:
     envVars:
       - key: ENVIRONMENT
         value: production
+      - key: RUN_WORKER_INLINE
+        value: "true"
       - key: MONGODB_URI
         sync: false # Set in Render Dashboard (MongoDB Atlas connection string)
       - key: MONGODB_DATABASE
@@ -31,43 +40,7 @@ services:
         sync: false # Set to your actual frontend Render URL after frontend creation
 
   # ---------------------------------------------------------------------------
-  # 2. RQ Background Worker (Code Execution & Grading)
-  # ---------------------------------------------------------------------------
-  - type: worker
-    name: codesphere-worker
-    runtime: python
-    rootDir: codesphere/backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: python -m app.workers.run_worker
-    autoDeploy: true
-    envVars:
-      - key: ENVIRONMENT
-        value: production
-      - key: MONGODB_URI
-        fromService:
-          type: web
-          name: codesphere-backend
-          envVarKey: MONGODB_URI
-      - key: MONGODB_DATABASE
-        value: codesphere
-      - key: REDIS_URL
-        fromService:
-          type: web
-          name: codesphere-backend
-          envVarKey: REDIS_URL
-      - key: JWT_SECRET
-        fromService:
-          type: web
-          name: codesphere-backend
-          envVarKey: JWT_SECRET
-      - key: JUDGE0_URL
-        fromService:
-          type: web
-          name: codesphere-backend
-          envVarKey: JUDGE0_URL
-
-  # ---------------------------------------------------------------------------
-  # 3. React Frontend (Static Site with SPA routing rewrite)
+  # 2. React Frontend (Static Site with SPA routing rewrite)
   # ---------------------------------------------------------------------------
   - type: web
     name: codesphere-frontend
