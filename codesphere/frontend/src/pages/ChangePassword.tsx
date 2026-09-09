@@ -10,7 +10,7 @@ import ThemeToggle from '../components/ui/ThemeToggle'
 import { AlertIcon, CodeIcon } from '../components/ui/Icons'
 
 export default function ChangePassword() {
-  const { user, refreshUser } = useAuth()
+  const { user, applyAuthResponse } = useAuth()
   const navigate = useNavigate()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -34,9 +34,12 @@ export default function ChangePassword() {
 
     setSubmitting(true)
     try {
-      await api.changePassword(currentPassword, newPassword)
-      await refreshUser()
-      navigate(user?.role === 'admin' ? '/admin/dashboard' : '/student/dashboard')
+      // change-password intentionally invalidates the token this request
+      // itself used (see the backend comment) - it returns a fresh one,
+      // which must replace the stored token before anything else uses it.
+      const response = await api.changePassword(currentPassword, newPassword)
+      applyAuthResponse(response)
+      navigate(response.user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not change password. Please try again.')
     } finally {

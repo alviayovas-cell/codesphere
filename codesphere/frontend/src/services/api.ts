@@ -112,8 +112,8 @@ export function getMe(): Promise<User> {
   return request<User>('/auth/me')
 }
 
-export function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
-  return request<{ message: string }>('/auth/change-password', {
+export function changePassword(currentPassword: string, newPassword: string): Promise<LoginResponse> {
+  return request<LoginResponse>('/auth/change-password', {
     method: 'POST',
     body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   })

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import * as api from '../services/api'
+import type { LoginResponse } from '../services/api'
 import type { User } from '../types'
 
 const TOKEN_STORAGE_KEY = 'codesphere_token'
@@ -10,6 +11,11 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<User>
   logout: () => void
   refreshUser: () => Promise<void>
+  /** Adopts a fresh token + user from any endpoint that issues one (login,
+   * change-password) - anywhere that isn't a plain login still needs to
+   * replace the stored token, since the old one may no longer be valid
+   * (e.g. change-password intentionally invalidates it). */
+  applyAuthResponse: (response: LoginResponse) => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -36,13 +42,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false))
   }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const response = await api.login(email, password)
+  const applyAuthResponse = useCallback((response: LoginResponse) => {
     localStorage.setItem(TOKEN_STORAGE_KEY, response.access_token)
     api.setAuthToken(response.access_token)
     setUser(response.user)
-    return response.user
   }, [])
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const response = await api.login(email, password)
+      applyAuthResponse(response)
+      return response.user
+    },
+    [applyAuthResponse],
+  )
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
@@ -56,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, refreshUser, applyAuthResponse }}>
       {children}
     </AuthContext.Provider>
   )
