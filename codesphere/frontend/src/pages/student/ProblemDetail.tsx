@@ -18,6 +18,10 @@ import { AlertIcon, ChevronLeftIcon, ExpandIcon } from '../../components/ui/Icon
 import { cn } from '../../lib/cn'
 
 const AUTOSAVE_INTERVAL_MS = 12000
+// Debounced save after the student stops typing, on top of the periodic
+// save above - keeps the server copy (and therefore the admin monitoring
+// view) close to current without firing a request per keystroke.
+const AUTOSAVE_DEBOUNCE_MS = 2000
 
 const lockedStatusMessage: Record<string, string> = {
   submitted: 'You have submitted this round — this problem is now read-only.',
@@ -125,6 +129,17 @@ export default function ProblemDetail() {
       save()
     }
   }, [roundId, problemId])
+
+  // Round mode: debounced save ~2s after the last edit (additive to the
+  // periodic/unmount/visibility/pre-submit saves - none of those change).
+  useEffect(() => {
+    if (!roundId || !problemId) return
+    if (roundSessionRef.current?.status !== 'active') return
+    const timer = setTimeout(() => {
+      api.autosaveCode(roundId, problemId, codeRef.current).catch(() => {})
+    }, AUTOSAVE_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [code, roundId, problemId])
 
   // Round mode: Page Visibility API monitoring (spec section 16).
   // `visibilitychange` is the sole trigger reported to the server for

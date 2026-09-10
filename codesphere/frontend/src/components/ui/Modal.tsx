@@ -10,9 +10,26 @@ interface ModalProps {
   /** Set true for critical, non-dismissible notices (e.g. auto-submit
    * confirmation) - hides the close affordances. */
   blocking?: boolean
+  /** Width. Defaults to 'md' (unchanged from before); 'lg'/'xl' for
+   * wider content such as a code viewer. */
+  size?: 'md' | 'lg' | 'xl'
 }
 
-export default function Modal({ open, onClose, title, children, footer, blocking = false }: ModalProps) {
+const sizeClass: Record<NonNullable<ModalProps['size']>, string> = {
+  md: 'max-w-md',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+}
+
+export default function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  blocking = false,
+  size = 'md',
+}: ModalProps) {
   useEffect(() => {
     if (!open || blocking) return
     function onKeyDown(e: KeyboardEvent) {
@@ -35,7 +52,7 @@ export default function Modal({ open, onClose, title, children, footer, blocking
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="relative w-full max-w-md rounded-lg border border-zinc-200 bg-white p-5 shadow-lg dark:border-zinc-800 dark:bg-zinc-900"
+        className={`relative w-full ${sizeClass[size]} rounded-lg border border-zinc-200 bg-white p-5 shadow-lg dark:border-zinc-800 dark:bg-zinc-900`}
       >
         <div className="flex items-start justify-between gap-4">
           <h2 id="modal-title" className="text-base font-semibold text-zinc-900 dark:text-white">

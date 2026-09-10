@@ -239,6 +239,11 @@ export interface ActivityEventPublic {
   metadata: Record<string, unknown>
 }
 
+export interface AssignedProblemSummary {
+  problemId: string
+  title: string
+}
+
 export interface SessionMonitorSummary {
   sessionId: string
   studentId: string
@@ -248,6 +253,19 @@ export interface SessionMonitorSummary {
   violationCount: number
   startedAt: string
   expiresAt: string
+  assignedProblems: AssignedProblemSummary[]
+}
+
+export interface StudentAutosaveView {
+  roundId: string
+  studentId: string
+  studentName: string
+  studentRegisterNumber: string
+  problemId: string
+  problemTitle: string
+  language: string
+  code: string | null
+  updatedAt: string | null
 }
 
 export interface QuestionResultPublic {

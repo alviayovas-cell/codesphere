@@ -29,7 +29,7 @@ from app.database.repositories.submission_repository import SubmissionRepository
 from app.database.repositories.user_repository import UserRepository
 from app.models.common import UserRole
 from app.models.user import User
-from app.schemas.activity import ActivityEventPublic, SessionMonitorSummary
+from app.schemas.activity import ActivityEventPublic, SessionMonitorSummary, StudentAutosaveView
 from app.schemas.admin import PasswordResetResponse, StudentImportResult
 from app.schemas.analytics import AnalyticsOverview
 from app.schemas.auth import UserPublic, to_user_public
@@ -493,6 +493,26 @@ async def list_round_sessions(
     service: CodingRoundService = Depends(_round_service),
 ) -> list[SessionMonitorSummary]:
     return await service.list_sessions_for_round(round_id)
+
+
+@router.get(
+    "/rounds/{round_id}/students/{student_id}/problems/{problem_id}/autosave",
+    response_model=StudentAutosaveView,
+)
+async def get_student_autosave(
+    round_id: str,
+    student_id: str,
+    problem_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: CodingRoundService = Depends(_round_service),
+) -> StudentAutosaveView:
+    """Admin-only: the latest autosaved code a student wrote for one
+    problem in one round. Not real-time - it's whatever the student's
+    existing autosave last persisted."""
+    try:
+        return await service.get_student_autosave(round_id, student_id, problem_id)
+    except (RoundNotFoundError, SessionNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get("/sessions/{session_id}/activity", response_model=list[ActivityEventPublic])

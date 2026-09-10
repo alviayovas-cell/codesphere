@@ -22,6 +22,7 @@ import type {
   RoundResultSummary,
   RoundSessionPublic,
   SessionMonitorSummary,
+  StudentAutosaveView,
   TestCaseAdminView,
   TestCaseVisibility,
   User,
@@ -480,6 +481,18 @@ export function listRoundSessions(roundId: string): Promise<SessionMonitorSummar
 
 export function getSessionActivity(sessionId: string): Promise<ActivityEventPublic[]> {
   return request<ActivityEventPublic[]>(`/admin/sessions/${sessionId}/activity`)
+}
+
+/** Latest autosaved code a student wrote for one problem in one round.
+ * Admin-only; not real-time (the student's existing autosave persists it). */
+export function getStudentAutosave(
+  roundId: string,
+  studentId: string,
+  problemId: string,
+): Promise<StudentAutosaveView> {
+  return request<StudentAutosaveView>(
+    `/admin/rounds/${roundId}/students/${studentId}/problems/${problemId}/autosave`,
+  )
 }
 
 export function unlockSession(sessionId: string): Promise<SessionMonitorSummary> {

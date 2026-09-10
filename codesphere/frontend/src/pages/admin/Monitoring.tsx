@@ -1,13 +1,22 @@
+import Editor from '@monaco-editor/react'
 import { useCallback, useEffect, useState } from 'react'
 import * as api from '../../services/api'
 import { ApiError } from '../../services/api'
-import type { ActivityEventPublic, ActivityEventType, CodingRoundAdminView, SessionMonitorSummary } from '../../types'
+import { useTheme } from '../../context/ThemeContext'
+import type {
+  ActivityEventPublic,
+  ActivityEventType,
+  CodingRoundAdminView,
+  SessionMonitorSummary,
+  StudentAutosaveView,
+} from '../../types'
 import PageHeader from '../../components/layout/PageHeader'
 import Button from '../../components/ui/Button'
 import { Select } from '../../components/ui/Field'
 import { Badge, SessionStatusBadge } from '../../components/ui/Badge'
 import { Table, Tbody, Td, Th, Thead, Tr } from '../../components/ui/Table'
 import Modal from '../../components/ui/Modal'
+import Spinner from '../../components/ui/Spinner'
 import { InlineError } from '../../components/ui/ErrorState'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonText } from '../../components/ui/Skeleton'
@@ -27,6 +36,7 @@ function formatDateTime(iso: string) {
 }
 
 export default function Monitoring() {
+  const { resolvedTheme } = useTheme()
   const [rounds, setRounds] = useState<CodingRoundAdminView[] | null>(null)
   const [selectedRoundId, setSelectedRoundId] = useState<string>('')
   const [sessions, setSessions] = useState<SessionMonitorSummary[] | null>(null)
@@ -36,6 +46,13 @@ export default function Monitoring() {
   const [activitySession, setActivitySession] = useState<SessionMonitorSummary | null>(null)
   const [activity, setActivity] = useState<ActivityEventPublic[] | null>(null)
   const [activityError, setActivityError] = useState<string | null>(null)
+
+  // Code viewer: latest autosaved code for one student + one problem.
+  const [codeSession, setCodeSession] = useState<SessionMonitorSummary | null>(null)
+  const [codeProblemId, setCodeProblemId] = useState<string>('')
+  const [codeView, setCodeView] = useState<StudentAutosaveView | null>(null)
+  const [codeLoading, setCodeLoading] = useState(false)
+  const [codeError, setCodeError] = useState<string | null>(null)
 
   useEffect(() => {
     api
@@ -86,6 +103,44 @@ export default function Monitoring() {
     } finally {
       setUnlockingId(null)
     }
+  }
+
+  const fetchCode = useCallback(
+    async (roundId: string, studentId: string, problemId: string) => {
+      if (!roundId || !studentId || !problemId) return
+      setCodeLoading(true)
+      setCodeError(null)
+      try {
+        setCodeView(await api.getStudentAutosave(roundId, studentId, problemId))
+      } catch (err) {
+        setCodeView(null)
+        setCodeError(err instanceof ApiError ? err.message : 'Failed to load the student’s code.')
+      } finally {
+        setCodeLoading(false)
+      }
+    },
+    [],
+  )
+
+  function openCode(session: SessionMonitorSummary) {
+    const problemId = session.assignedProblems[0]?.problemId ?? ''
+    setCodeSession(session)
+    setCodeProblemId(problemId)
+    setCodeView(null)
+    setCodeError(null)
+    if (problemId) fetchCode(selectedRoundId, session.studentId, problemId)
+  }
+
+  function selectCodeProblem(problemId: string) {
+    setCodeProblemId(problemId)
+    if (codeSession) fetchCode(selectedRoundId, codeSession.studentId, problemId)
+  }
+
+  function closeCode() {
+    setCodeSession(null)
+    setCodeView(null)
+    setCodeError(null)
+    setCodeProblemId('')
   }
 
   return (
@@ -168,6 +223,11 @@ export default function Monitoring() {
                       <Td>{formatDateTime(session.expiresAt)}</Td>
                       <Td className="text-right">
                         <div className="flex justify-end gap-2">
+                          {session.assignedProblems.length > 0 && (
+                            <Button variant="ghost" size="sm" onClick={() => openCode(session)}>
+                              View Code
+                            </Button>
+                          )}
                           <Button variant="ghost" size="sm" onClick={() => openActivity(session)}>
                             View Log
                           </Button>
@@ -221,6 +281,115 @@ export default function Monitoring() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={codeSession !== null}
+        onClose={closeCode}
+        size="xl"
+        title={codeSession ? `Code — ${codeSession.studentName}` : 'Student code'}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                codeSession && fetchCode(selectedRoundId, codeSession.studentId, codeProblemId)
+              }
+              disabled={codeLoading || !codeProblemId}
+            >
+              Refresh
+            </Button>
+            <Button variant="primary" onClick={closeCode}>
+              Close
+            </Button>
+          </>
+        }
+      >
+        {codeSession && (
+          <div className="flex flex-col gap-3">
+            {codeSession.assignedProblems.length > 1 && (
+              <div className="max-w-sm">
+                <Select
+                  label="Problem"
+                  value={codeProblemId}
+                  onChange={(e) => selectCodeProblem(e.target.value)}
+                  aria-label="Select problem"
+                >
+                  {codeSession.assignedProblems.map((p) => (
+                    <option key={p.problemId} value={p.problemId}>
+                      {p.title}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
+              <div>
+                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Student</dt>
+                <dd className="text-zinc-700 dark:text-zinc-200">{codeSession.studentName}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Register Number</dt>
+                <dd className="text-zinc-700 dark:text-zinc-200">{codeSession.studentRegisterNumber}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Problem</dt>
+                <dd className="text-zinc-700 dark:text-zinc-200">
+                  {codeView?.problemTitle ??
+                    codeSession.assignedProblems.find((p) => p.problemId === codeProblemId)?.title ??
+                    '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Language</dt>
+                <dd className="text-zinc-700 dark:text-zinc-200">{codeView?.language ?? 'C'}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Status</dt>
+                <dd className="text-zinc-700 dark:text-zinc-200">Latest Saved Code</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Last Saved</dt>
+                <dd className="text-zinc-700 dark:text-zinc-200">
+                  {codeView?.updatedAt ? formatDateTime(codeView.updatedAt) : 'Not saved yet'}
+                </dd>
+              </div>
+            </dl>
+
+            {codeError && <InlineError message={codeError} />}
+
+            {!codeError && codeLoading && (
+              <div className="flex items-center gap-2 py-6 text-sm text-zinc-500 dark:text-zinc-400">
+                <Spinner className="h-4 w-4" /> Loading code...
+              </div>
+            )}
+
+            {!codeError && !codeLoading && codeView && codeView.code === null && (
+              <p className="rounded-md border border-dashed border-zinc-300 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+                No code has been saved yet.
+              </p>
+            )}
+
+            {!codeError && !codeLoading && codeView && codeView.code !== null && (
+              <div className="overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
+                <Editor
+                  height="420px"
+                  language={(codeView.language || 'c').toLowerCase()}
+                  theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
+                  value={codeView.code}
+                  options={{
+                    readOnly: true,
+                    domReadOnly: true,
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    scrollBeyondLastLine: false,
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
       </Modal>

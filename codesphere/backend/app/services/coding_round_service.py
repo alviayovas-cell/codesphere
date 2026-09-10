@@ -20,7 +20,7 @@ from app.models.coding_round import (
 )
 from app.models.common import ActivityEventType, Difficulty, RoundStatus, SessionStatus, SubmissionType
 from app.models.round_session import RoundSession
-from app.schemas.activity import SessionMonitorSummary
+from app.schemas.activity import AssignedProblemSummary, SessionMonitorSummary, StudentAutosaveView
 from app.schemas.coding_round import (
     AssignedQuestionPublic,
     CodingRoundCreate,
@@ -497,12 +497,22 @@ class CodingRoundService:
             raise RuntimeError("list_sessions_for_round requires a user_repository")
 
         sessions = await self.session_repository.find_many({"roundId": round_id}, limit=10000)
-        # One batch lookup instead of one find_by_id per session - matters
-        # once a round has dozens of students (Phase 14 load testing).
+        # Batch lookups instead of one find_by_id per session/question -
+        # matters once a round has dozens of students (Phase 14 load testing).
         students = {u.id: u for u in await self.user_repository.find_by_ids([s.student_id for s in sessions])}
+        problem_ids = {q.problem_id for s in sessions for q in s.assigned_questions}
+        problems = {p.id: p for p in await self.problem_repository.find_by_ids(list(problem_ids))}
+
         summaries: list[SessionMonitorSummary] = []
         for session in sessions:
             student = students.get(session.student_id)
+            assigned_problems = [
+                AssignedProblemSummary(
+                    problem_id=q.problem_id,
+                    title=problems[q.problem_id].title if q.problem_id in problems else "Unknown problem",
+                )
+                for q in sorted(session.assigned_questions, key=lambda q: q.order)
+            ]
             summaries.append(
                 SessionMonitorSummary(
                     session_id=session.id,
@@ -513,10 +523,58 @@ class CodingRoundService:
                     violation_count=session.violation_count,
                     started_at=session.started_at,
                     expires_at=session.expires_at,
+                    assigned_problems=assigned_problems,
                 )
             )
         summaries.sort(key=lambda s: s.started_at)
         return summaries
+
+    async def get_student_autosave(
+        self, round_id: str, student_id: str, problem_id: str
+    ) -> StudentAutosaveView:
+        """Admin monitoring: the LATEST autosaved code for one
+        (round, student, problem). Scoped by all three - the autosave is
+        looked up by this student's own session for this round, so it can
+        never return another student's, another round's, or a problem the
+        student wasn't assigned. This is a pure read: unlike get_session it
+        does not run lazy expiry, so opening the viewer never mutates the
+        session.
+
+        `code`/`updatedAt` come back null when no autosave exists yet
+        (student never opened this problem) - the caller shows a "nothing
+        saved yet" message rather than a blank editor."""
+        if self.user_repository is None:
+            raise RuntimeError("get_student_autosave requires a user_repository")
+
+        round_ = await self.round_repository.find_by_id(round_id)
+        if round_ is None:
+            raise RoundNotFoundError("Coding round not found")
+
+        session = await self.session_repository.find_one({"roundId": round_id, "studentId": student_id})
+        if session is None:
+            raise SessionNotFoundError("This student has not started this round")
+
+        assigned = next((q for q in session.assigned_questions if q.problem_id == problem_id), None)
+        if assigned is None:
+            raise SessionNotFoundError("That problem is not assigned to this student in this round")
+
+        student = await self.user_repository.find_by_id(student_id)
+        problem = await self.problem_repository.find_by_id(problem_id)
+        autosave = await self.autosave_repository.find_one(
+            {"sessionId": session.id, "problemId": problem_id}
+        )
+
+        return StudentAutosaveView(
+            round_id=round_id,
+            student_id=student_id,
+            student_name=student.name if student else "Unknown student",
+            student_register_number=student.register_number if student else "-",
+            problem_id=problem_id,
+            problem_title=problem.title if problem else "Unknown problem",
+            language=problem.language if problem else "C",
+            code=autosave.code if autosave else None,
+            updated_at=autosave.updated_at if autosave else None,
+        )
 
     async def get_session_activity(self, session_id: str) -> list[ActivityEvent]:
         events = await self.activity_event_repository.find_many({"sessionId": session_id}, limit=10000)
