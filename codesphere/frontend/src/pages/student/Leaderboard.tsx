@@ -12,7 +12,8 @@ import { SkeletonText } from '../../components/ui/Skeleton'
 import { cn } from '../../lib/cn'
 import { TrophyIcon } from '../../components/ui/Icons'
 
-function formatDateTime(iso: string) {
+function formatDateTime(iso: string | null) {
+  if (!iso) return 'Not submitted'
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 

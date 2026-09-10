@@ -6,7 +6,7 @@ from app.database.repositories.round_session_repository import RoundSessionRepos
 from app.database.repositories.submission_repository import SubmissionRepository
 from app.database.repositories.user_repository import UserRepository
 from app.models.coding_round import CodingRound
-from app.models.common import SessionStatus, SubmissionType
+from app.models.common import SessionStatus, SubmissionType, UserRole
 from app.models.problem import Problem
 from app.models.round_session import RoundSession
 from app.models.submission import Submission
@@ -258,30 +258,71 @@ class ResultsService:
     async def _build_leaderboard(
         self, round_: CodingRound, highlight_student_id: str | None
     ) -> LeaderboardResponse:
-        sessions = [
-            s
-            for s in await self.session_repository.find_many({"roundId": round_.id}, limit=10000)
-            if s.status in _FINISHED_STATUSES
-        ]
-        problems, best_submissions = await self._load_round_context(round_.id, sessions)
-        ranked = self._rank_sessions(sessions, problems, best_submissions)
-        students = await self._load_students([session.student_id for session, _, _ in ranked])
+        """Every student is a row here, not just the ones who finished -
+        there's no per-round enrollment list anywhere in this schema, so
+        "eligible for this round" is the same student roster the admin
+        Student Management page shows. Students with no session (never
+        started) or a still-in-progress one show up with score 0 and no
+        completion time instead of being silently absent."""
+        sessions = await self.session_repository.find_many({"roundId": round_.id}, limit=10000)
+        session_by_student = {s.student_id: s for s in sessions}
 
-        entries: list[LeaderboardEntry] = []
-        for position, (session, score, total_marks) in enumerate(ranked, start=1):
-            student = students.get(session.student_id)
-            entries.append(
-                LeaderboardEntry(
-                    rank=position,
-                    student_id=session.student_id,
-                    student_name=student.name if student else "Unknown student",
-                    student_register_number=student.register_number if student else "-",
-                    score=score,
-                    total_marks=total_marks,
-                    completed_at=session.completed_at or round_.end_time,
-                    is_you=session.student_id == highlight_student_id,
-                )
+        eligible_students = await self.user_repository.find_many(
+            {"role": UserRole.STUDENT.value}, limit=10000
+        )
+        students_by_id = {u.id: u for u in eligible_students}
+        # A session can in principle belong to someone no longer in that
+        # roster (e.g. their role changed after playing the round) - keep
+        # them visible too, via one extra batch lookup, rather than letting
+        # them silently vanish from a leaderboard they already have a
+        # result on.
+        extra_ids = [sid for sid in session_by_student if sid not in students_by_id]
+        if extra_ids:
+            for extra_student in await self.user_repository.find_by_ids(extra_ids):
+                students_by_id[extra_student.id] = extra_student
+
+        problems, best_submissions = await self._load_round_context(round_.id, sessions)
+        # A student with no session yet has no assigned_questions to size a
+        # denominator from - fall back to the round's full problem pool so
+        # their row still reads as "0 / N" instead of "0 / 0".
+        pool_problems = await self._load_problems(round_.problem_ids)
+        pool_total_marks = sum(p.marks for p in pool_problems.values())
+
+        rows: list[tuple[str, int, int, datetime | None]] = []
+        for student_id in students_by_id:
+            session = session_by_student.get(student_id)
+            if session is not None:
+                score, total_marks, _ = self._score_session(session, problems, best_submissions)
+                completed_at = session.completed_at if session.status in _FINISHED_STATUSES else None
+            else:
+                score, total_marks, completed_at = 0, pool_total_marks, None
+            rows.append((student_id, score, total_marks, completed_at))
+
+        # Same ranking rule as before (score desc, faster finish wins ties),
+        # plus a register-number tiebreaker so students tied at zero (or
+        # any other score) still get distinct, deterministic, stable ranks
+        # instead of sharing one.
+        rows.sort(
+            key=lambda r: (
+                -r[1],
+                r[3] or datetime.max.replace(tzinfo=timezone.utc),
+                students_by_id[r[0]].register_number,
             )
+        )
+
+        entries = [
+            LeaderboardEntry(
+                rank=position,
+                student_id=student_id,
+                student_name=students_by_id[student_id].name,
+                student_register_number=students_by_id[student_id].register_number,
+                score=score,
+                total_marks=total_marks,
+                completed_at=completed_at,
+                is_you=student_id == highlight_student_id,
+            )
+            for position, (student_id, score, total_marks, completed_at) in enumerate(rows, start=1)
+        ]
         return LeaderboardResponse(results_available=True, entries=entries)
 
     # -- admin -------------------------------------------------------------

@@ -282,7 +282,7 @@ export interface LeaderboardEntry {
   studentRegisterNumber: string
   score: number
   totalMarks: number
-  completedAt: string
+  completedAt: string | null
   isYou: boolean
 }
 

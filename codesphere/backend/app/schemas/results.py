@@ -61,7 +61,7 @@ class LeaderboardEntry(BaseModel):
     student_register_number: str = Field(serialization_alias="studentRegisterNumber")
     score: int
     total_marks: int = Field(serialization_alias="totalMarks")
-    completed_at: datetime = Field(serialization_alias="completedAt")
+    completed_at: datetime | None = Field(serialization_alias="completedAt")
     is_you: bool = Field(default=False, serialization_alias="isYou")
 
     model_config = {"populate_by_name": True}
