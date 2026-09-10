@@ -42,7 +42,6 @@ export default function ProblemDetail() {
   const [roundSession, setRoundSession] = useState<RoundSessionPublic | null>(null)
 
   const [code, setCode] = useState(DEFAULT_TEMPLATE)
-  const [stdin, setStdin] = useState('')
   const [fullscreen, setFullscreen] = useState(false)
   const [tab, setTab] = useState<PanelTab>('tests')
 
@@ -67,7 +66,6 @@ export default function ProblemDetail() {
       .getProblem(problemId)
       .then(async (p) => {
         setProblem(p)
-        setStdin(p.publicTestCases[0]?.input ?? '')
 
         if (roundId) {
           // Round context: the server-side autosave is the source of
@@ -272,15 +270,19 @@ export default function ProblemDetail() {
     setRunning(true)
     setJobPhase('queued')
     try {
-      const { jobId } = await api.runCode(problemId, code, stdin)
-      const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status), timeoutMs: 75000 })
+      const { jobId } = await api.runCode(problemId, code)
+      const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status), timeoutMs: 145000 })
       if (finalStatus.status === 'failed') {
         setActionError(finalStatus.error ?? 'Run failed. Please try again.')
         setTab('errors')
       } else {
         const result = finalStatus.result as RunCodeResult
         setRunResult(result)
-        setTab(result.compileOutput || result.stderr ? 'errors' : 'output')
+        setTab(
+          result.verdict === 'compilation_error' || result.verdict === 'runtime_error'
+            ? 'errors'
+            : 'output',
+        )
       }
     } catch (err) {
       setActionError(await describeActionError(err))
@@ -313,7 +315,7 @@ export default function ProblemDetail() {
       } else {
         const result = finalStatus.result as SubmitCodeResult
         setSubmitResult(result)
-        setTab(result.compileOutput ? 'errors' : 'output')
+        setTab(result.verdict === 'compilation_error' ? 'errors' : 'output')
       }
     } catch (err) {
       setActionError(await describeActionError(err))
@@ -345,8 +347,16 @@ export default function ProblemDetail() {
 
   if (!problem) return <PageSpinner />
 
-  const compileError = runResult?.compileOutput || submitResult?.compileOutput
-  const runtimeError = runResult?.stderr
+  // Judge0 returns compiler *warnings* in compileOutput even when the
+  // build succeeds, so only treat it as an error when the verdict actually
+  // says so - otherwise it's just a warning, and shouldn't masquerade as
+  // "Compilation Error" next to an Accepted/Wrong Answer badge.
+  const isCompileError =
+    runResult?.verdict === 'compilation_error' || submitResult?.verdict === 'compilation_error'
+  const compileOutput = runResult?.compileOutput || submitResult?.compileOutput
+  const compileError = isCompileError ? compileOutput : undefined
+  const compilerWarnings = !isCompileError ? compileOutput : undefined
+  const runtimeError = runResult?.verdict === 'runtime_error' ? runResult?.stderr : undefined
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -466,35 +476,57 @@ export default function ProblemDetail() {
             <div className="scrollbar-thin flex-1 overflow-y-auto p-3">
               {tab === 'tests' && (
                 <div className="flex flex-col gap-3">
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                      Input (stdin)
-                    </label>
-                    <textarea
-                      value={stdin}
-                      onChange={(e) => setStdin(e.target.value)}
-                      rows={4}
-                      className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 font-mono text-sm text-zinc-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
-                    />
-                  </div>
-                  {problem.publicTestCases.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                        Sample Test Cases
-                      </p>
-                      <div className="mt-1.5 flex flex-col gap-2">
-                        {problem.publicTestCases.map((tc, i) => (
-                          <button
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Run Code checks your solution against these sample test cases. Submit Code additionally
+                    runs hidden test cases and records your score.
+                  </p>
+                  {problem.publicTestCases.length === 0 ? (
+                    <p className="text-sm text-zinc-400 dark:text-zinc-500">
+                      This problem has no sample test cases — use Submit Code to have your solution graded.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {problem.publicTestCases.map((tc, i) => {
+                        const caseResult = runResult?.testCaseResults.find((r) => r.index === i + 1)
+                        return (
+                          <div
                             key={i}
-                            type="button"
-                            onClick={() => setStdin(tc.input)}
-                            className="rounded-md border border-zinc-200 p-2 text-left text-xs hover:border-primary-300 dark:border-zinc-800 dark:hover:border-primary-800"
+                            className="rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
                           >
-                            <p className="font-medium text-zinc-500 dark:text-zinc-400">Case {i + 1} (click to load)</p>
-                            <pre className="mt-1 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">{tc.input}</pre>
-                          </button>
-                        ))}
-                      </div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-zinc-500 dark:text-zinc-400">Case {i + 1}</p>
+                              {caseResult && (
+                                <span
+                                  className={cn(
+                                    'flex items-center gap-1 font-medium',
+                                    caseResult.verdict === 'accepted'
+                                      ? 'text-green-600 dark:text-green-400'
+                                      : 'text-red-600 dark:text-red-400',
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      'h-1.5 w-1.5 rounded-full',
+                                      caseResult.verdict === 'accepted' ? 'bg-green-500' : 'bg-red-500',
+                                    )}
+                                  />
+                                  {caseResult.verdict === 'accepted' ? 'Passed' : 'Failed'}
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                              Input
+                            </p>
+                            <pre className="mt-0.5 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">{tc.input}</pre>
+                            <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                              Expected Output
+                            </p>
+                            <pre className="mt-0.5 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
+                              {tc.expectedOutput}
+                            </pre>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -507,18 +539,45 @@ export default function ProblemDetail() {
                   )}
                   {runResult && (
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <VerdictBadge verdict={runResult.verdict} />
+                        {runResult.totalTests > 0 && (
+                          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                            {runResult.passedTests}/{runResult.totalTests} sample test cases passed
+                          </span>
+                        )}
                         {runResult.timeSeconds !== null && (
                           <span className="text-xs text-zinc-400 dark:text-zinc-500">
                             {runResult.timeSeconds}s{runResult.memoryKb !== null && ` · ${runResult.memoryKb} KB`}
                           </span>
                         )}
                       </div>
+                      {runResult.testCaseResults.length > 0 && (
+                        <ul className="mt-3 flex flex-col gap-1">
+                          {runResult.testCaseResults.map((tc) => (
+                            <li key={tc.index} className="flex items-center gap-2 text-sm">
+                              <span
+                                className={cn(
+                                  'h-1.5 w-1.5 shrink-0 rounded-full',
+                                  tc.verdict === 'accepted' ? 'bg-green-500' : 'bg-red-500',
+                                )}
+                              />
+                              <span className="text-zinc-600 dark:text-zinc-300">
+                                Test Case {tc.index}: {tc.verdict === 'accepted' ? 'Passed' : 'Failed'}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                       {runResult.stdout && (
-                        <pre className="mt-2 whitespace-pre-wrap rounded bg-zinc-50 p-2 text-xs text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-                          {runResult.stdout}
-                        </pre>
+                        <>
+                          <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                            Your Output
+                          </p>
+                          <pre className="mt-1 whitespace-pre-wrap rounded bg-zinc-50 p-2 text-xs text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+                            {runResult.stdout}
+                          </pre>
+                        </>
                       )}
                     </div>
                   )}
@@ -560,7 +619,7 @@ export default function ProblemDetail() {
 
               {tab === 'errors' && (
                 <div>
-                  {!compileError && !runtimeError && (
+                  {!compileError && !runtimeError && !compilerWarnings && (
                     <p className="text-sm text-zinc-400 dark:text-zinc-500">No errors.</p>
                   )}
                   {compileError && (
@@ -576,6 +635,14 @@ export default function ProblemDetail() {
                       <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-red-500">Runtime Error</p>
                       <pre className="mt-1 whitespace-pre-wrap rounded bg-red-50 p-2 text-xs text-red-800 dark:bg-red-950 dark:text-red-200">
                         {runtimeError}
+                      </pre>
+                    </>
+                  )}
+                  {compilerWarnings && (
+                    <>
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-amber-500">Compiler Warnings</p>
+                      <pre className="mt-1 whitespace-pre-wrap rounded bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                        {compilerWarnings}
                       </pre>
                     </>
                   )}

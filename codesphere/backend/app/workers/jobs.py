@@ -60,11 +60,14 @@ def _unreachable_result() -> ExecutionResult:
     )
 
 
-def run_code_job(student_id: str, problem_id: str, code: str, stdin: str) -> dict:
-    """Run Code: execute against student-supplied stdin, no grading, nothing
-    persisted. Returns a dict matching the RunCodeResult schema (camelCase
-    keys, since this is read back and re-served as-is by the job-status
-    endpoint)."""
+def run_code_job(student_id: str, problem_id: str, code: str) -> dict:
+    """Run Code: execute the student's current editor code against this
+    problem's PUBLIC (sample) test cases and report a real verdict from
+    comparing actual output to each case's expected output - never just
+    "did it run". Hidden test cases are never touched here; those are
+    Submit-only. Nothing is graded or persisted. Returns a dict matching
+    the RunCodeResult schema (camelCase keys, since this is read back and
+    re-served as-is by the job-status endpoint)."""
     job_start = time.perf_counter()
     _log_queue_wait("run_code_job")
 
@@ -72,22 +75,73 @@ def run_code_job(student_id: str, problem_id: str, code: str, stdin: str) -> dic
     if not ObjectId.is_valid(problem_id) or db.problems.find_one({"_id": ObjectId(problem_id)}) is None:
         return {"error": "Problem not found"}
 
-    judge = SyncJudgeService()
-    try:
-        result = judge.execute(source_code=code, stdin=stdin)
-    except JudgeServiceError as exc:
-        logger.error("run_code_job: Judge0 unreachable: %s", exc)
-        result = _unreachable_result()
+    public_cases = list(
+        db.test_cases.find({"problemId": problem_id, "visibility": TestCaseVisibility.PUBLIC.value})
+    )
+    public_cases.sort(key=lambda tc: str(tc["_id"]))
 
-    logger.info("run_code_job: total_job_time=%.3fs", time.perf_counter() - job_start)
+    judge = SyncJudgeService()
+
+    if not public_cases:
+        # No sample cases to check against - say so plainly rather than
+        # returning a verdict that would be meaningless. Mirrors
+        # submit_code_job's own "no test cases configured" handling.
+        logger.info(
+            "run_code_job: no public test cases (total_job_time=%.3fs)", time.perf_counter() - job_start
+        )
+        return {
+            "verdict": Verdict.INTERNAL_ERROR.value,
+            "stdout": "",
+            "stderr": "",
+            "compileOutput": "This problem has no sample test cases to run against. Use Submit to have your solution graded.",
+            "statusDescription": "No sample test cases",
+            "timeSeconds": None,
+            "memoryKb": None,
+            "passedTests": 0,
+            "totalTests": 0,
+            "testCaseResults": [],
+        }
+
+    # First case sequentially (so a compile error short-circuits the rest),
+    # then any remaining cases in parallel - same shape as submit_code_job.
+    first = _execute_case(judge, code, public_cases[0])
+    results = [first]
+    if first.verdict not in (Verdict.COMPILATION_ERROR, Verdict.INTERNAL_ERROR) and len(public_cases) > 1:
+        with ThreadPoolExecutor(max_workers=min(len(public_cases) - 1, 8)) as pool:
+            results.extend(pool.map(lambda tc: _execute_case(judge, code, tc), public_cases[1:]))
+    elif len(public_cases) > 1:
+        results.extend(ExecutionResult(verdict=first.verdict) for _ in public_cases[1:])
+
+    passed = sum(1 for r in results if r.verdict == Verdict.ACCEPTED)
+    total = len(results)
+    verdict = (
+        Verdict.ACCEPTED
+        if passed == total
+        else next((r.verdict for r in results if r.verdict != Verdict.ACCEPTED), Verdict.WRONG_ANSWER)
+    )
+
+    # Show the student the first run that didn't pass (its actual output /
+    # error), so "Wrong Answer" comes with something to look at; if every
+    # case passed, show the first case's output.
+    display = next((r for r in results if r.verdict != Verdict.ACCEPTED), results[0])
+
+    logger.info(
+        "run_code_job: total_job_time=%.3fs (public_cases=%d, passed=%d)",
+        time.perf_counter() - job_start, total, passed,
+    )
     return {
-        "verdict": result.verdict.value,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-        "compileOutput": result.compile_output,
-        "statusDescription": result.status_description,
-        "timeSeconds": result.time_seconds,
-        "memoryKb": result.memory_kb,
+        "verdict": verdict.value,
+        "stdout": display.stdout,
+        "stderr": display.stderr,
+        "compileOutput": display.compile_output,
+        "statusDescription": display.status_description,
+        "timeSeconds": display.time_seconds,
+        "memoryKb": display.memory_kb,
+        "passedTests": passed,
+        "totalTests": total,
+        "testCaseResults": [
+            {"index": i + 1, "verdict": r.verdict.value} for i, r in enumerate(results)
+        ],
     }
 
 

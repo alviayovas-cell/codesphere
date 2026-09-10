@@ -57,10 +57,10 @@ class Settings(BaseSettings):
     # sleep between them, ~61s at the defaults above) - otherwise RQ kills
     # the job mid-retry before JudgeService even gives up on its own,
     # turning a slow-but-recoverable Judge0 response into a hard failure.
-    # Submit additionally runs the first test case sequentially (to short-
-    # circuit on a compile error) before the rest in parallel, so its
-    # worst case is roughly double a single call's.
-    run_job_timeout_seconds: int = 70
+    # Both Run and Submit run the first test case sequentially (to short-
+    # circuit on a compile error) before the rest in parallel, so each
+    # one's worst case is roughly double a single call's.
+    run_job_timeout_seconds: int = 140
     submit_job_timeout_seconds: int = 140
     job_result_ttl_seconds: int = 3600
 

@@ -110,6 +110,9 @@ export interface RunCodeResult {
   verdict: Verdict
   stdout: string
   stderr: string
+  passedTests: number
+  totalTests: number
+  testCaseResults: TestCaseResult[]
   compileOutput: string
   statusDescription: string
   timeSeconds: number | null

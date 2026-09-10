@@ -336,10 +336,10 @@ export function deleteTestCase(testCaseId: string): Promise<void> {
 // queue (spec section 12) and return immediately. Use pollJob to wait for
 // the result.
 
-export function runCode(problemId: string, code: string, stdin: string): Promise<JobEnqueuedResponse> {
+export function runCode(problemId: string, code: string): Promise<JobEnqueuedResponse> {
   return request<JobEnqueuedResponse>('/code/run', {
     method: 'POST',
-    body: JSON.stringify({ problemId, code, stdin }),
+    body: JSON.stringify({ problemId, code }),
   })
 }
 

@@ -6,9 +6,13 @@ from app.models.common import Verdict
 class RunCodeRequest(BaseModel):
     problem_id: str = Field(validation_alias="problemId")
     code: str
-    stdin: str = ""
 
     model_config = {"populate_by_name": True}
+
+
+class TestCaseResult(BaseModel):
+    index: int
+    verdict: Verdict
 
 
 class RunCodeResult(BaseModel):
@@ -19,6 +23,13 @@ class RunCodeResult(BaseModel):
     status_description: str = Field(serialization_alias="statusDescription")
     time_seconds: float | None = Field(default=None, serialization_alias="timeSeconds")
     memory_kb: int | None = Field(default=None, serialization_alias="memoryKb")
+    # Run Code evaluates against the problem's public sample test cases, so
+    # it reports pass/fail counts and a per-case breakdown, same as Submit.
+    passed_tests: int = Field(default=0, serialization_alias="passedTests")
+    total_tests: int = Field(default=0, serialization_alias="totalTests")
+    test_case_results: list[TestCaseResult] = Field(
+        default_factory=list, serialization_alias="testCaseResults"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -29,11 +40,6 @@ class SubmitCodeRequest(BaseModel):
     round_id: str | None = Field(default=None, validation_alias="roundId")
 
     model_config = {"populate_by_name": True}
-
-
-class TestCaseResult(BaseModel):
-    index: int
-    verdict: Verdict
 
 
 class SubmitCodeResult(BaseModel):
