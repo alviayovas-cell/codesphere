@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as api from '../../services/api'
 import { ApiError } from '../../services/api'
-import type { AdminRoundResultEntry, CodingRoundAdminView, ProblemSummary } from '../../types'
+import type { AdminRoundResultEntry, CodingRoundAdminView, LeaderboardVisibility, ProblemSummary } from '../../types'
 import PageHeader from '../../components/layout/PageHeader'
 import Button from '../../components/ui/Button'
-import { Input, Textarea } from '../../components/ui/Field'
-import { RoundStatusBadge, SessionStatusBadge } from '../../components/ui/Badge'
+import { Input, Select, Textarea } from '../../components/ui/Field'
+import { Badge, RoundStatusBadge, SessionStatusBadge } from '../../components/ui/Badge'
 import { Table, Tbody, Td, Th, Thead, Tr } from '../../components/ui/Table'
 import Modal from '../../components/ui/Modal'
 import { InlineError } from '../../components/ui/ErrorState'
@@ -29,6 +29,7 @@ interface FormState {
   mediumQuestions: string
   hardQuestions: string
   randomizeOrder: boolean
+  leaderboardVisibility: LeaderboardVisibility
 }
 
 const emptyForm: FormState = {
@@ -42,6 +43,7 @@ const emptyForm: FormState = {
   mediumQuestions: '0',
   hardQuestions: '0',
   randomizeOrder: true,
+  leaderboardVisibility: 'after_round_ends',
 }
 
 function toLocalInputValue(iso: string) {
@@ -96,6 +98,9 @@ export default function RoundManagement() {
           mediumQuestions: Number(form.mediumQuestions) || 0,
           hardQuestions: Number(form.hardQuestions) || 0,
           randomizeOrder: form.randomizeOrder,
+        },
+        resultConfiguration: {
+          leaderboardVisibility: form.leaderboardVisibility,
         },
       })
       setForm(emptyForm)
@@ -201,6 +206,22 @@ export default function RoundManagement() {
             </div>
           </div>
 
+          <div className="w-full max-w-xs">
+            <Select
+              label="Leaderboard Visibility"
+              value={form.leaderboardVisibility}
+              onChange={(e) => setForm({ ...form, leaderboardVisibility: e.target.value as LeaderboardVisibility })}
+            >
+              <option value="after_round_ends">After Round Ends</option>
+              <option value="immediate">Show Immediately</option>
+            </Select>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {form.leaderboardVisibility === 'immediate'
+                ? 'Students can see live rankings as soon as the round starts.'
+                : 'Rankings stay hidden from students until the round’s time window closes.'}
+            </p>
+          </div>
+
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
               Problems ({form.problemIds.length} selected)
@@ -244,7 +265,12 @@ export default function RoundManagement() {
           <div key={round.id} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="font-medium text-zinc-900 dark:text-white">{round.title}</h3>
-              <RoundStatusBadge status={round.status} />
+              <div className="flex items-center gap-1.5">
+                {round.resultConfiguration.leaderboardVisibility === 'immediate' && (
+                  <Badge variant="primary">Live Leaderboard</Badge>
+                )}
+                <RoundStatusBadge status={round.status} />
+              </div>
             </div>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{round.description}</p>
             <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">

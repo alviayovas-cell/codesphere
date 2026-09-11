@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.models.common import Difficulty, RoundStatus, SessionStatus
+from app.models.common import Difficulty, LeaderboardVisibility, RoundStatus, SessionStatus
 
 
 class AssessmentConfigurationInput(BaseModel):
@@ -35,6 +35,11 @@ class ResultConfigurationInput(BaseModel):
     )
     show_score_immediately: bool = Field(
         default=False, serialization_alias="showScoreImmediately", validation_alias="showScoreImmediately"
+    )
+    leaderboard_visibility: LeaderboardVisibility = Field(
+        default=LeaderboardVisibility.AFTER_ROUND_ENDS,
+        serialization_alias="leaderboardVisibility",
+        validation_alias="leaderboardVisibility",
     )
 
     model_config = {"populate_by_name": True}

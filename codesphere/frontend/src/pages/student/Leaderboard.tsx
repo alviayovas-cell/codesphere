@@ -17,6 +17,11 @@ function formatDateTime(iso: string | null) {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
+// Only relevant while a "show immediately" round is still open - refetches
+// in the background (no loading flash) so newly graded submissions show up
+// without the student needing to reload the page.
+const LEADERBOARD_POLL_INTERVAL_MS = 15000
+
 export default function Leaderboard() {
   const [rounds, setRounds] = useState<CodingRoundSummary[] | null>(null)
   const [selectedRoundId, setSelectedRoundId] = useState<string>('')
@@ -46,6 +51,30 @@ export default function Leaderboard() {
   useEffect(() => {
     if (selectedRoundId) loadLeaderboard(selectedRoundId)
   }, [selectedRoundId, loadLeaderboard])
+
+  // Live leaderboards poll while the round is still open, so rankings pick
+  // up new submissions without a manual refresh; polling stops on its own
+  // once the round's end time passes, and never runs at all for a round
+  // using the default "after round ends" visibility.
+  useEffect(() => {
+    if (!leaderboard?.isLive || !selectedRoundId) return
+    const round = rounds?.find((r) => r.id === selectedRoundId)
+    if (!round) return
+    const endTime = new Date(round.endTime).getTime()
+
+    const interval = setInterval(() => {
+      if (Date.now() >= endTime) {
+        clearInterval(interval)
+        return
+      }
+      api.getRoundLeaderboard(selectedRoundId).then(setLeaderboard).catch(() => {
+        // Best-effort background refresh - a transient failure just means
+        // the next tick tries again, no need to surface an error banner.
+      })
+    }, LEADERBOARD_POLL_INTERVAL_MS)
+
+    return () => clearInterval(interval)
+  }, [leaderboard?.isLive, selectedRoundId, rounds])
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
@@ -85,6 +114,15 @@ export default function Leaderboard() {
               ))}
             </Select>
           </div>
+
+          {leaderboard?.isLive && leaderboard.resultsAvailable && (
+            <div className="mt-3 flex items-center gap-2">
+              <Badge variant="primary">Live Leaderboard</Badge>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                Rankings update as students submit their solutions.
+              </span>
+            </div>
+          )}
 
           <div className="mt-4">
             {leaderboard === null ? (

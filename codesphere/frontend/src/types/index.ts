@@ -179,10 +179,13 @@ export interface AssessmentConfig {
   autoSubmitEnabled: boolean
 }
 
+export type LeaderboardVisibility = 'after_round_ends' | 'immediate'
+
 export interface ResultConfig {
   showResultsDuringRound: boolean
   showTestCaseCount: boolean
   showScoreImmediately: boolean
+  leaderboardVisibility: LeaderboardVisibility
 }
 
 export interface CodingRoundAdminView {
@@ -311,6 +314,7 @@ export interface LeaderboardEntry {
 export interface LeaderboardResponse {
   resultsAvailable: boolean
   entries: LeaderboardEntry[]
+  isLive: boolean
 }
 
 export interface AdminRoundResultEntry {

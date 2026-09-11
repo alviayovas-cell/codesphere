@@ -6,7 +6,7 @@ from app.database.repositories.round_session_repository import RoundSessionRepos
 from app.database.repositories.submission_repository import SubmissionRepository
 from app.database.repositories.user_repository import UserRepository
 from app.models.coding_round import CodingRound
-from app.models.common import SessionStatus, SubmissionType, UserRole
+from app.models.common import LeaderboardVisibility, SessionStatus, SubmissionType, UserRole
 from app.models.problem import Problem
 from app.models.round_session import RoundSession
 from app.models.submission import Submission
@@ -120,10 +120,22 @@ class ResultsService:
         return round_.result_configuration.show_score_immediately
 
     def _leaderboard_available(self, round_: CodingRound) -> bool:
-        """The leaderboard reveals *other* students' standing, so it always
-        waits for the round's window to fully close - showScoreImmediately
-        only ever applies to a student's own result."""
-        return datetime.now(timezone.utc) >= round_.end_time
+        """The leaderboard reveals *other* students' standing, so by
+        default it waits for the round's window to fully close -
+        showScoreImmediately only ever applies to a student's own result.
+        A round can opt out of that wait via
+        resultConfiguration.leaderboardVisibility == "immediate", in
+        which case the leaderboard opens the moment the round's window
+        actually starts (not before - "immediate" means "don't make me
+        wait for the end", not "always open") and simply stays available
+        after end_time too, same as the default mode already does."""
+        now = datetime.now(timezone.utc)
+        if round_.result_configuration.leaderboard_visibility == LeaderboardVisibility.IMMEDIATE:
+            return now >= round_.start_time
+        return now >= round_.end_time
+
+    def _leaderboard_is_live(self, round_: CodingRound) -> bool:
+        return round_.result_configuration.leaderboard_visibility == LeaderboardVisibility.IMMEDIATE
 
     async def _load_round_context(
         self, round_id: str, sessions: list[RoundSession]
@@ -245,7 +257,9 @@ class ResultsService:
             raise RoundNotFoundError("Coding round not found")
 
         if not self._leaderboard_available(round_):
-            return LeaderboardResponse(results_available=False, entries=[])
+            return LeaderboardResponse(
+                results_available=False, entries=[], is_live=self._leaderboard_is_live(round_)
+            )
 
         return await self._build_leaderboard(round_, highlight_student_id=student_id)
 
@@ -323,7 +337,9 @@ class ResultsService:
             )
             for position, (student_id, score, total_marks, completed_at) in enumerate(rows, start=1)
         ]
-        return LeaderboardResponse(results_available=True, entries=entries)
+        return LeaderboardResponse(
+            results_available=True, entries=entries, is_live=self._leaderboard_is_live(round_)
+        )
 
     # -- admin -------------------------------------------------------------
 

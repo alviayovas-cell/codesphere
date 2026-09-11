@@ -70,6 +70,11 @@ class LeaderboardEntry(BaseModel):
 class LeaderboardResponse(BaseModel):
     results_available: bool = Field(serialization_alias="resultsAvailable")
     entries: list[LeaderboardEntry]
+    # True when this round's resultConfiguration.leaderboardVisibility is
+    # "immediate" - lets the frontend show a "Live Leaderboard" indicator
+    # and decide whether to poll for updates, without needing a second
+    # request to fetch the round's configuration separately.
+    is_live: bool = Field(default=False, serialization_alias="isLive")
 
     model_config = {"populate_by_name": True}
 
