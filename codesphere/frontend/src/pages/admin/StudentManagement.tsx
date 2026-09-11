@@ -8,20 +8,29 @@ import { Input } from '../../components/ui/Field'
 import { Badge } from '../../components/ui/Badge'
 import { Table, Tbody, Td, Th, Thead, Tr } from '../../components/ui/Table'
 import Modal from '../../components/ui/Modal'
-import { InlineError } from '../../components/ui/ErrorState'
+import { InlineError, InlineSuccess } from '../../components/ui/ErrorState'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonText } from '../../components/ui/Skeleton'
-import { SearchIcon, UsersIcon } from '../../components/ui/Icons'
+import { AlertIcon, SearchIcon, UsersIcon } from '../../components/ui/Icons'
 
 export default function StudentManagement() {
   const [students, setStudents] = useState<User[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<StudentImportResult | null>(null)
   const [resetResult, setResetResult] = useState<{ name: string; temporaryPassword: string } | null>(null)
   const [resettingId, setResettingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Deactivate / Activate / Delete - each holds the target student while its
+  // confirmation dialog is open (null = closed). Only one of the three can
+  // be open at once, so a single in-flight id covers all three actions.
+  const [pendingDeactivate, setPendingDeactivate] = useState<User | null>(null)
+  const [pendingActivate, setPendingActivate] = useState<User | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<User | null>(null)
+  const [processingId, setProcessingId] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setError(null)
@@ -37,6 +46,7 @@ export default function StudentManagement() {
 
   async function handleFileSelected(file: File) {
     setError(null)
+    setSuccess(null)
     setImporting(true)
     try {
       const result = await api.importStudents(file)
@@ -52,6 +62,7 @@ export default function StudentManagement() {
 
   async function handleResetPassword(student: User) {
     setError(null)
+    setSuccess(null)
     setResettingId(student.id)
     try {
       const { temporaryPassword } = await api.resetStudentPassword(student.id)
@@ -61,6 +72,54 @@ export default function StudentManagement() {
       setError(err instanceof ApiError ? err.message : 'Could not reset password.')
     } finally {
       setResettingId(null)
+    }
+  }
+
+  async function handleDeactivate(student: User) {
+    setError(null)
+    setSuccess(null)
+    setProcessingId(student.id)
+    try {
+      await api.deactivateStudent(student.id)
+      setPendingDeactivate(null)
+      setSuccess('Student account deactivated successfully.')
+      load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not deactivate this student.')
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  async function handleActivate(student: User) {
+    setError(null)
+    setSuccess(null)
+    setProcessingId(student.id)
+    try {
+      await api.activateStudent(student.id)
+      setPendingActivate(null)
+      setSuccess('Student account activated successfully.')
+      load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not activate this student.')
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  async function handleDelete(student: User) {
+    setError(null)
+    setSuccess(null)
+    setProcessingId(student.id)
+    try {
+      await api.deleteStudent(student.id)
+      setPendingDelete(null)
+      setSuccess('Student profile deleted successfully.')
+      load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete this student.')
+    } finally {
+      setProcessingId(null)
     }
   }
 
@@ -91,6 +150,7 @@ export default function StudentManagement() {
       />
 
       {error && <div className="mt-4"><InlineError message={error} /></div>}
+      {success && <div className="mt-4"><InlineSuccess message={success} /></div>}
 
       {students === null && !error && (
         <div className="mt-6">
@@ -137,21 +197,42 @@ export default function StudentManagement() {
                       <Td>{student.email}</Td>
                       <Td>{student.class}</Td>
                       <Td>
-                        {student.mustChangePassword ? (
+                        {!student.isActive ? (
+                          <Badge variant="neutral">Inactive</Badge>
+                        ) : student.mustChangePassword ? (
                           <Badge variant="warning">Must change password</Badge>
                         ) : (
                           <Badge variant="success">Active</Badge>
                         )}
                       </Td>
                       <Td className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          loading={resettingId === student.id}
-                          onClick={() => handleResetPassword(student)}
-                        >
-                          Reset Password
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            loading={resettingId === student.id}
+                            onClick={() => handleResetPassword(student)}
+                          >
+                            Reset Password
+                          </Button>
+                          {student.isActive ? (
+                            <Button variant="ghost" size="sm" onClick={() => setPendingDeactivate(student)}>
+                              Deactivate
+                            </Button>
+                          ) : (
+                            <Button variant="ghost" size="sm" onClick={() => setPendingActivate(student)}>
+                              Activate
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 dark:text-red-400"
+                            onClick={() => setPendingDelete(student)}
+                          >
+                            Delete Student
+                          </Button>
+                        </div>
                       </Td>
                     </Tr>
                   ))}
@@ -229,6 +310,118 @@ export default function StudentManagement() {
               This is shown only once — share it with the student now. They'll be asked to change it on next login.
             </span>
           </p>
+        )}
+      </Modal>
+
+      <Modal
+        open={pendingDeactivate !== null}
+        onClose={() => (processingId ? undefined : setPendingDeactivate(null))}
+        title="Deactivate Student?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPendingDeactivate(null)} disabled={processingId !== null}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={processingId === pendingDeactivate?.id}
+              onClick={() => pendingDeactivate && handleDeactivate(pendingDeactivate)}
+            >
+              {processingId === pendingDeactivate?.id ? 'Deactivating...' : 'Deactivate Student'}
+            </Button>
+          </>
+        }
+      >
+        {pendingDeactivate && (
+          <div className="flex gap-3">
+            <AlertIcon className="h-5 w-5 shrink-0 text-amber-500" />
+            <div>
+              <p>
+                <span className="font-semibold text-zinc-900 dark:text-white">{pendingDeactivate.name}</span>
+                {' · '}
+                {pendingDeactivate.registerNumber} · {pendingDeactivate.email}
+              </p>
+              <p className="mt-2">
+                This will prevent the student from logging in. Their submissions, results, coding-round history, and
+                academic records will be preserved.
+              </p>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={pendingActivate !== null}
+        onClose={() => (processingId ? undefined : setPendingActivate(null))}
+        title="Activate Student?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPendingActivate(null)} disabled={processingId !== null}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={processingId === pendingActivate?.id}
+              onClick={() => pendingActivate && handleActivate(pendingActivate)}
+            >
+              {processingId === pendingActivate?.id ? 'Activating...' : 'Activate Student'}
+            </Button>
+          </>
+        }
+      >
+        {pendingActivate && (
+          <div className="flex gap-3">
+            <AlertIcon className="h-5 w-5 shrink-0 text-amber-500" />
+            <div>
+              <p>
+                <span className="font-semibold text-zinc-900 dark:text-white">{pendingActivate.name}</span>
+                {' · '}
+                {pendingActivate.registerNumber} · {pendingActivate.email}
+              </p>
+              <p className="mt-2">This will restore the student's ability to log in.</p>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={pendingDelete !== null}
+        onClose={() => (processingId ? undefined : setPendingDelete(null))}
+        title="Delete Student Profile?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPendingDelete(null)} disabled={processingId !== null}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={processingId === pendingDelete?.id}
+              onClick={() => pendingDelete && handleDelete(pendingDelete)}
+            >
+              {processingId === pendingDelete?.id ? 'Deleting...' : 'Delete Student'}
+            </Button>
+          </>
+        }
+      >
+        {pendingDelete && (
+          <div className="flex gap-3">
+            <AlertIcon className="h-5 w-5 shrink-0 text-red-500" />
+            <div>
+              <p>
+                <span className="font-semibold text-zinc-900 dark:text-white">{pendingDelete.name}</span>
+                {' · '}
+                {pendingDelete.registerNumber} · {pendingDelete.email} · {pendingDelete.class}
+              </p>
+              <p className="mt-2 font-medium text-red-600 dark:text-red-400">
+                This will permanently remove the student's personal account/profile information. This action cannot
+                be undone.
+              </p>
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                Assessment records such as submissions and results will be preserved where required for
+                institutional records.
+              </p>
+            </div>
+          </div>
         )}
       </Modal>
     </div>

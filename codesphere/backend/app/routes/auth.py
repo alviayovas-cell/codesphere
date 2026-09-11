@@ -5,7 +5,7 @@ from app.core.security import create_access_token
 from app.database.repositories.user_repository import UserRepository
 from app.models.user import User
 from app.schemas.auth import ChangePasswordRequest, LoginRequest, LoginResponse, UserPublic, to_user_public
-from app.services.auth_service import AuthService, InvalidCredentialsError
+from app.services.auth_service import AccountDeactivatedError, AuthService, InvalidCredentialsError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -19,6 +19,8 @@ async def login(
         user, token = await service.login(payload.email, payload.password)
     except InvalidCredentialsError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    except AccountDeactivatedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
     return LoginResponse(access_token=token, user=to_user_public(user))
 

@@ -10,6 +10,10 @@ class InvalidCredentialsError(Exception):
     pass
 
 
+class AccountDeactivatedError(Exception):
+    pass
+
+
 class AuthService:
     def __init__(self, user_repository: UserRepository):
         self.user_repository = user_repository
@@ -28,6 +32,14 @@ class AuthService:
         # before this fix, all other endpoints included).
         if user is None or not await asyncio.to_thread(verify_password, password, user.password_hash):
             raise InvalidCredentialsError("Invalid email or password")
+        # Checked only after the password verifies, so a wrong-password
+        # attempt against a deactivated account still just says "invalid
+        # email or password" - it never reveals the account's status to
+        # someone who doesn't already know the password.
+        if not user.is_active:
+            raise AccountDeactivatedError(
+                "Your account has been deactivated. Please contact your administrator."
+            )
         return user
 
     async def login(self, email: str, password: str) -> tuple[User, str]:

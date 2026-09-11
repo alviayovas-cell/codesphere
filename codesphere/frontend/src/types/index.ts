@@ -8,6 +8,7 @@ export interface User {
   class: string
   role: UserRole
   mustChangePassword: boolean
+  isActive: boolean
 }
 
 export interface LearningTopic {

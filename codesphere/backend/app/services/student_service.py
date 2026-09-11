@@ -105,3 +105,45 @@ class StudentService:
             },
         )
         return temp_password
+
+    async def set_active(self, student_id: str, is_active: bool) -> User:
+        """Deactivate (is_active=False) or reactivate (True) a student
+        account. The users document is never touched by this beyond the
+        isActive flag - submissions, sessions, autosaves, and every other
+        assessment record are completely untouched, and reversible by
+        calling this again with the opposite value.
+
+        Bumping updatedAt here is deliberate, not incidental: it's the
+        same field get_current_user already compares a token's `iat`
+        against to reject stale tokens (Phase 13's password-change guard).
+        Reusing that existing check means deactivating someone who is
+        already mid-session invalidates their current token on their very
+        next request too, not just future login attempts - no separate
+        mechanism needed."""
+        user = await self.user_repository.find_by_id(student_id)
+        if user is None or user.role != UserRole.STUDENT:
+            raise StudentNotFoundError("Student not found")
+
+        updated = await self.user_repository.update_one(
+            student_id,
+            {"isActive": is_active, "updatedAt": datetime.now(timezone.utc)},
+        )
+        return updated or user
+
+    async def delete_student(self, student_id: str) -> None:
+        """Permanently removes a student's personal account/profile
+        (name, email, registerNumber, class, passwordHash - the users
+        document is the only place any of that lives). Every assessment
+        record (submissions, round_sessions, autosaves, activity_events,
+        topic_progress) references the student only by this id, never by
+        name/email, and every place that resolves a student's name from
+        one of those ids already falls back to "Unknown student"/"-" for
+        an id that no longer matches a user - so institutional records
+        survive intact without this needing to touch any other
+        collection. Irreversible: unlike set_active, there is no document
+        left to reactivate."""
+        user = await self.user_repository.find_by_id(student_id)
+        if user is None or user.role != UserRole.STUDENT:
+            raise StudentNotFoundError("Student not found")
+
+        await self.user_repository.delete_one(student_id)

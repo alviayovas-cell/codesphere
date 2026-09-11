@@ -17,6 +17,7 @@ class UserPublic(BaseModel):
     student_class: str = Field(serialization_alias="class")
     role: UserRole
     must_change_password: bool = Field(serialization_alias="mustChangePassword")
+    is_active: bool = Field(serialization_alias="isActive")
 
     model_config = {"populate_by_name": True}
 
@@ -41,4 +42,5 @@ def to_user_public(user: User) -> UserPublic:
         student_class=user.student_class,
         role=user.role,
         must_change_password=user.must_change_password,
+        is_active=user.is_active,
     )

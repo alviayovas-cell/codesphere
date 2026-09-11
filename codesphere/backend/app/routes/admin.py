@@ -204,6 +204,55 @@ async def reset_student_password(
     return PasswordResetResponse(temporary_password=temp_password)
 
 
+@router.post("/students/{student_id}/deactivate", response_model=UserPublic)
+async def deactivate_student(
+    student_id: str,
+    _: User = Depends(get_current_admin_user),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> UserPublic:
+    """Marks the account inactive - it still exists, along with every
+    submission/session/result it has, but can no longer log in (checked
+    server-side in AuthService.authenticate, not just hidden in the UI)."""
+    service = StudentService(user_repository)
+    try:
+        user = await service.set_active(student_id, False)
+    except StudentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return to_user_public(user)
+
+
+@router.post("/students/{student_id}/activate", response_model=UserPublic)
+async def activate_student(
+    student_id: str,
+    _: User = Depends(get_current_admin_user),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> UserPublic:
+    service = StudentService(user_repository)
+    try:
+        user = await service.set_active(student_id, True)
+    except StudentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return to_user_public(user)
+
+
+@router.delete("/students/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_student(
+    student_id: str,
+    _: User = Depends(get_current_admin_user),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> None:
+    """Permanently removes the student's personal account/profile. Their
+    submissions/results/coding-round history are untouched - see
+    StudentService.delete_student for why that's safe. Rejects (404) any
+    id that isn't an existing student, which also protects admin
+    accounts: this can never delete anything with role != student."""
+    service = StudentService(user_repository)
+    try:
+        await service.delete_student(student_id)
+    except StudentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
 @router.post("/learning/modules", response_model=LearningModulePublic, status_code=status.HTTP_201_CREATED)
 async def create_module(
     payload: LearningModuleCreate,

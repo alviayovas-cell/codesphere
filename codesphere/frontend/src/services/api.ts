@@ -176,6 +176,18 @@ export function resetStudentPassword(studentId: string): Promise<{ temporaryPass
   })
 }
 
+export function deactivateStudent(studentId: string): Promise<User> {
+  return request<User>(`/admin/students/${studentId}/deactivate`, { method: 'POST' })
+}
+
+export function activateStudent(studentId: string): Promise<User> {
+  return request<User>(`/admin/students/${studentId}/activate`, { method: 'POST' })
+}
+
+export function deleteStudent(studentId: string): Promise<void> {
+  return request<void>(`/admin/students/${studentId}`, { method: 'DELETE' })
+}
+
 // -- Learning (student-facing) ----------------------------------------------
 
 export function getModules(): Promise<LearningModule[]> {
