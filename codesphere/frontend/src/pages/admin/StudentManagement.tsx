@@ -5,6 +5,7 @@ import type { User } from '../../types'
 import PageHeader from '../../components/layout/PageHeader'
 import Button from '../../components/ui/Button'
 import { Input } from '../../components/ui/Field'
+import { PasswordInput } from '../../components/ui/PasswordInput'
 import { Badge } from '../../components/ui/Badge'
 import { Table, Tbody, Td, Th, Thead, Tr } from '../../components/ui/Table'
 import Modal from '../../components/ui/Modal'
@@ -12,6 +13,34 @@ import { InlineError, InlineSuccess } from '../../components/ui/ErrorState'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonText } from '../../components/ui/Skeleton'
 import { AlertIcon, SearchIcon, UsersIcon } from '../../components/ui/Icons'
+
+interface AddStudentForm {
+  name: string
+  email: string
+  registerNumber: string
+  studentClass: string
+  password: string
+}
+
+const emptyAddStudentForm: AddStudentForm = {
+  name: '',
+  email: '',
+  registerNumber: '',
+  studentClass: '',
+  password: '',
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function validateAddStudentForm(form: AddStudentForm): string | null {
+  if (!form.name.trim()) return 'Name is required.'
+  if (!form.email.trim()) return 'Email is required.'
+  if (!EMAIL_PATTERN.test(form.email.trim())) return 'Enter a valid email address.'
+  if (!form.registerNumber.trim()) return 'Register number is required.'
+  if (!form.studentClass.trim()) return 'Class is required.'
+  if (form.password.length < 8) return 'Password must be at least 8 characters long.'
+  return null
+}
 
 export default function StudentManagement() {
   const [students, setStudents] = useState<User[] | null>(null)
@@ -31,6 +60,11 @@ export default function StudentManagement() {
   const [pendingActivate, setPendingActivate] = useState<User | null>(null)
   const [pendingDelete, setPendingDelete] = useState<User | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
+
+  const [showAddStudent, setShowAddStudent] = useState(false)
+  const [addStudentForm, setAddStudentForm] = useState(emptyAddStudentForm)
+  const [addStudentError, setAddStudentError] = useState<string | null>(null)
+  const [addingStudent, setAddingStudent] = useState(false)
 
   const load = useCallback(() => {
     setError(null)
@@ -57,6 +91,39 @@ export default function StudentManagement() {
     } finally {
       setImporting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  function closeAddStudent() {
+    setShowAddStudent(false)
+    setAddStudentForm(emptyAddStudentForm)
+    setAddStudentError(null)
+  }
+
+  async function handleAddStudent() {
+    const validationError = validateAddStudentForm(addStudentForm)
+    if (validationError) {
+      setAddStudentError(validationError)
+      return
+    }
+    setAddStudentError(null)
+    setAddingStudent(true)
+    try {
+      await api.createStudent({
+        name: addStudentForm.name.trim(),
+        email: addStudentForm.email.trim(),
+        registerNumber: addStudentForm.registerNumber.trim(),
+        class: addStudentForm.studentClass.trim(),
+        password: addStudentForm.password,
+      })
+      closeAddStudent()
+      setError(null)
+      setSuccess('Student added successfully.')
+      load()
+    } catch (err) {
+      setAddStudentError(err instanceof ApiError ? err.message : 'Could not add student.')
+    } finally {
+      setAddingStudent(false)
     }
   }
 
@@ -135,6 +202,9 @@ export default function StudentManagement() {
         description="Import students via CSV, and manage their access."
         actions={
           <>
+            <Button variant="secondary" onClick={() => setShowAddStudent(true)}>
+              Add Student
+            </Button>
             <input
               ref={fileInputRef}
               type="file"
@@ -242,6 +312,58 @@ export default function StudentManagement() {
           </div>
         </>
       )}
+
+      <Modal
+        open={showAddStudent}
+        onClose={() => (addingStudent ? undefined : closeAddStudent())}
+        title="Add Student"
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeAddStudent} disabled={addingStudent}>
+              Cancel
+            </Button>
+            <Button variant="primary" loading={addingStudent} onClick={handleAddStudent}>
+              {addingStudent ? 'Adding...' : 'Add Student'}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          {addStudentError && <InlineError message={addStudentError} />}
+          <Input
+            label="Name"
+            required
+            value={addStudentForm.name}
+            onChange={(e) => setAddStudentForm({ ...addStudentForm, name: e.target.value })}
+          />
+          <Input
+            label="Email"
+            type="email"
+            required
+            value={addStudentForm.email}
+            onChange={(e) => setAddStudentForm({ ...addStudentForm, email: e.target.value })}
+          />
+          <Input
+            label="Register Number"
+            required
+            value={addStudentForm.registerNumber}
+            onChange={(e) => setAddStudentForm({ ...addStudentForm, registerNumber: e.target.value })}
+          />
+          <Input
+            label="Class"
+            required
+            value={addStudentForm.studentClass}
+            onChange={(e) => setAddStudentForm({ ...addStudentForm, studentClass: e.target.value })}
+          />
+          <PasswordInput
+            label="Password"
+            required
+            hint="At least 8 characters."
+            value={addStudentForm.password}
+            onChange={(e) => setAddStudentForm({ ...addStudentForm, password: e.target.value })}
+          />
+        </div>
+      </Modal>
 
       {/* Import summary - temp passwords are only ever returned once, so
           they must be shown clearly here for the admin to copy/distribute. */}

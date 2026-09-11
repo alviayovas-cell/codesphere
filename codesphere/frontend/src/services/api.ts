@@ -143,6 +143,21 @@ export function listStudents(): Promise<User[]> {
   return request<User[]>('/admin/students')
 }
 
+export interface CreateStudentRequest {
+  name: string
+  email: string
+  registerNumber: string
+  class: string
+  password: string
+}
+
+export function createStudent(payload: CreateStudentRequest): Promise<User> {
+  return request<User>('/admin/students', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function importStudents(file: File): Promise<StudentImportResult> {
   const formData = new FormData()
   formData.append('file', file)

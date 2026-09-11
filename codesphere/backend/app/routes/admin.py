@@ -30,7 +30,7 @@ from app.database.repositories.user_repository import UserRepository
 from app.models.common import UserRole
 from app.models.user import User
 from app.schemas.activity import ActivityEventPublic, SessionMonitorSummary, StudentAutosaveView
-from app.schemas.admin import PasswordResetResponse, StudentImportResult
+from app.schemas.admin import PasswordResetResponse, StudentCreate, StudentImportResult
 from app.schemas.analytics import AnalyticsOverview
 from app.schemas.auth import UserPublic, to_user_public
 from app.schemas.coding_round import CodingRoundAdminView, CodingRoundCreate, CodingRoundUpdate
@@ -71,7 +71,12 @@ from app.services.problem_service import (
     TestCaseNotFoundError,
 )
 from app.services.results_service import ResultsService
-from app.services.student_service import StudentNotFoundError, StudentService
+from app.services.student_service import (
+    DuplicateEmailError,
+    DuplicateRegisterNumberError,
+    StudentNotFoundError,
+    StudentService,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -170,6 +175,26 @@ async def list_students(
 ) -> list[UserPublic]:
     students = await user_repository.find_many({"role": UserRole.STUDENT.value}, limit=1000)
     return [to_user_public(student) for student in students]
+
+
+@router.post("/students", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
+async def create_student(
+    payload: StudentCreate,
+    _: User = Depends(get_current_admin_user),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> UserPublic:
+    """Admin-only single-student creation ('Add Student'), alongside the
+    existing CSV import. Always creates role=student regardless of
+    anything the client might send - StudentCreate has no role field at
+    all, so there's nothing for a caller to override."""
+    service = StudentService(user_repository)
+    try:
+        user = await service.create_student(payload)
+    except DuplicateEmailError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except DuplicateRegisterNumberError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return to_user_public(user)
 
 
 @router.post("/students/import", response_model=StudentImportResult)

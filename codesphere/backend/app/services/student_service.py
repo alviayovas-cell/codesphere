@@ -7,12 +7,20 @@ from app.core.security import generate_temporary_password, hash_password
 from app.database.repositories.user_repository import UserRepository
 from app.models.common import UserRole
 from app.models.user import User
-from app.schemas.admin import CreatedStudentCredential, StudentImportError, StudentImportResult
+from app.schemas.admin import CreatedStudentCredential, StudentCreate, StudentImportError, StudentImportResult
 
 REQUIRED_COLUMNS = {"Name", "RegisterNumber", "Email", "Class"}
 
 
 class StudentNotFoundError(Exception):
+    pass
+
+
+class DuplicateEmailError(Exception):
+    pass
+
+
+class DuplicateRegisterNumberError(Exception):
     pass
 
 
@@ -88,6 +96,36 @@ class StudentService:
             )
 
         return StudentImportResult(created=len(created), skipped=skipped, created_students=created)
+
+    async def create_student(self, payload: StudentCreate) -> User:
+        """Admin 'Add Student' - one manually-entered record, kept
+        separate from the CSV-import loop above (rather than refactored
+        to share it) so this addition can't touch that already-working
+        path, but produces an identical kind of record: same required
+        fields, same bcrypt hashing, same role=student, same
+        mustChangePassword=True first-login behavior (the admin knows
+        the exact password they just typed, same as a shared CSV
+        temporary password - the student should still set their own on
+        first login)."""
+        email = payload.email.lower()
+
+        if await self.user_repository.find_one({"email": email}):
+            raise DuplicateEmailError("Email already exists")
+        if await self.user_repository.find_one({"registerNumber": payload.register_number}):
+            raise DuplicateRegisterNumberError("Register number already exists")
+
+        password_hash = await asyncio.to_thread(hash_password, payload.password)
+        return await self.user_repository.insert_one(
+            User(
+                name=payload.name,
+                email=email,
+                password_hash=password_hash,
+                register_number=payload.register_number,
+                student_class=payload.student_class,
+                role=UserRole.STUDENT,
+                must_change_password=True,
+            )
+        )
 
     async def reset_password(self, student_id: str) -> str:
         user = await self.user_repository.find_by_id(student_id)
