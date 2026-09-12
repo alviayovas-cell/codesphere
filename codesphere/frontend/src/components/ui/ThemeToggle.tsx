@@ -18,7 +18,7 @@ export default function ThemeToggle({ className, showLabels = true }: { classNam
       role="radiogroup"
       aria-label="Theme"
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-800',
+        'inline-flex items-center gap-0.5 rounded-md border border-slate-200 p-0.5 dark:border-slate-800',
         className,
       )}
     >
@@ -35,8 +35,8 @@ export default function ThemeToggle({ className, showLabels = true }: { classNam
             className={cn(
               'flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors',
               active
-                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200',
+                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
             )}
           >
             <option.icon className="h-3.5 w-3.5" />

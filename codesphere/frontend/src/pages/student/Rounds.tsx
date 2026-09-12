@@ -89,13 +89,13 @@ export default function Rounds() {
         {rounds?.map((round) => {
           const { text, action } = statusInfo(round)
           return (
-            <div key={round.id} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            <div key={round.id} className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-white">{round.title}</h2>
+                <h2 className="text-base font-semibold text-slate-900 dark:text-white">{round.title}</h2>
                 <Badge variant={action === 'continue' ? 'success' : action === 'wait' ? 'warning' : 'neutral'}>{text}</Badge>
               </div>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{round.description}</p>
-              <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{round.description}</p>
+              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
                 {round.questionCount} question{round.questionCount === 1 ? '' : 's'} &middot; {round.totalMarks} marks
                 &middot; {round.durationMinutes} min &middot; window {formatDate(round.startTime)} &ndash; {formatDate(round.endTime)}
               </p>
@@ -145,7 +145,7 @@ export default function Rounds() {
           <AlertIcon className="h-5 w-5 shrink-0 text-amber-500" />
           <div>
             <p>
-              <span className="font-semibold text-zinc-900 dark:text-white">{pendingStart?.title}</span> is a timed,
+              <span className="font-semibold text-slate-900 dark:text-white">{pendingStart?.title}</span> is a timed,
               monitored assessment. Once started, the {pendingStart?.durationMinutes}-minute timer cannot be paused
               or restarted.
             </p>

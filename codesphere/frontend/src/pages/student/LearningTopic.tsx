@@ -56,7 +56,7 @@ export default function LearningTopicPage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
         <ErrorState message={error} onRetry={load} />
-        <Link to="/student/learning" className="mt-4 inline-block text-sm text-zinc-500 underline dark:text-zinc-400">
+        <Link to="/student/learning" className="mt-4 inline-block text-sm text-slate-500 underline dark:text-slate-400">
           Back to modules
         </Link>
       </div>
@@ -71,18 +71,18 @@ export default function LearningTopicPage() {
     <div className="mx-auto max-w-2xl px-4 py-6">
       <Link
         to="/student/learning"
-        className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
       >
         <ChevronLeftIcon className="h-4 w-4" /> Back to modules
       </Link>
 
-      <h1 className="mt-4 text-2xl font-semibold text-zinc-900 dark:text-white">{topic.title}</h1>
-      <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{topic.description}</p>
+      <h1 className="mt-4 text-2xl font-semibold text-slate-900 dark:text-white">{topic.title}</h1>
+      <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{topic.description}</p>
 
       {topic.videoUrl && (
         <div className="mt-5">
           {embedUrl ? (
-            <div className="aspect-video w-full overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <div className="aspect-video w-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
               <iframe src={embedUrl} title={topic.title} className="h-full w-full" allowFullScreen />
             </div>
           ) : (

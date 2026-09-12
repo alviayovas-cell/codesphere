@@ -41,10 +41,10 @@ export default function StudentDashboard() {
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-white sm:text-2xl">
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-white sm:text-2xl">
             Welcome back, {user?.name?.split(' ')[0]}
           </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {user?.registerNumber} &middot; {user?.class}
           </p>
         </div>
@@ -86,7 +86,7 @@ export default function StudentDashboard() {
         <div className="flex flex-col gap-8 lg:col-span-2">
           {/* Learning progress */}
           <section>
-            <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Learning Progress</h2>
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Learning Progress</h2>
             <div className="mt-3">
               {progress ? (
                 <ProgressCard title="C Programming" completed={progress.completedTopics} total={progress.totalTopics} />
@@ -99,7 +99,7 @@ export default function StudentDashboard() {
           {/* Continue learning */}
           <section>
             <div className="flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Continue Learning</h2>
+              <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Continue Learning</h2>
               <Link to="/student/learning" className="text-xs font-medium text-primary-600 hover:underline dark:text-primary-400">
                 View all modules
               </Link>
@@ -115,15 +115,15 @@ export default function StudentDashboard() {
                   <Link
                     key={topic.id}
                     to={`/student/learning/topics/${topic.id}`}
-                    className="group rounded-lg border border-zinc-200 p-4 transition-colors hover:border-primary-300 dark:border-zinc-800 dark:hover:border-primary-800"
+                    className="group rounded-lg border border-slate-200 p-4 transition-colors hover:border-primary-300 dark:border-slate-800 dark:hover:border-primary-800"
                   >
                     <div className="flex items-center gap-2">
                       <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary-50 text-primary-600 dark:bg-primary-950 dark:text-primary-400">
                         <BookIcon className="h-3.5 w-3.5" />
                       </span>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">{module.title}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{module.title}</p>
                     </div>
-                    <p className="mt-2 text-sm font-medium text-zinc-900 group-hover:text-primary-700 dark:text-white dark:group-hover:text-primary-400">
+                    <p className="mt-2 text-sm font-medium text-slate-900 group-hover:text-primary-700 dark:text-white dark:group-hover:text-primary-400">
                       {topic.title}
                     </p>
                   </Link>
@@ -139,7 +139,7 @@ export default function StudentDashboard() {
           {/* Upcoming coding rounds */}
           <section>
             <div className="flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Upcoming Coding Rounds</h2>
+              <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Upcoming Coding Rounds</h2>
               <Link to="/student/rounds" className="text-xs font-medium text-primary-600 hover:underline dark:text-primary-400">
                 View all
               </Link>
@@ -156,11 +156,11 @@ export default function StudentDashboard() {
                   <Link
                     key={r.id}
                     to={r.studentStatus ? `/student/rounds/${r.id}` : '/student/rounds'}
-                    className="flex items-center justify-between rounded-lg border border-zinc-200 p-3.5 transition-colors hover:border-primary-300 dark:border-zinc-800 dark:hover:border-primary-800"
+                    className="flex items-center justify-between rounded-lg border border-slate-200 p-3.5 transition-colors hover:border-primary-300 dark:border-slate-800 dark:hover:border-primary-800"
                   >
                     <div>
-                      <p className="text-sm font-medium text-zinc-900 dark:text-white">{r.title}</p>
-                      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                      <p className="text-sm font-medium text-slate-900 dark:text-white">{r.title}</p>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                         {r.questionCount} questions &middot; {r.durationMinutes} min
                       </p>
                     </div>
@@ -174,9 +174,9 @@ export default function StudentDashboard() {
 
         {/* Recent activity */}
         <section>
-          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Recent Activity</h2>
-          <div className="mt-3 rounded-lg border border-zinc-200 px-4 dark:border-zinc-800">
-            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Recent Activity</h2>
+          <div className="mt-3 rounded-lg border border-slate-200 px-4 dark:border-slate-800">
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
               {progress && progress.completedTopics > 0 ? (
                 <ActivityItem
                   icon={TrophyIcon}
@@ -192,7 +192,7 @@ export default function StudentDashboard() {
                 />
               ) : null}
               {(!progress || progress.completedTopics === 0) && !rounds?.some((r) => r.studentStatus) && (
-                <li className="py-6 text-center text-sm text-zinc-400 dark:text-zinc-500">
+                <li className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">
                   Nothing yet — start a lesson or a problem to see activity here.
                 </li>
               )}

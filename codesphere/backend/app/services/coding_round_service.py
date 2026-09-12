@@ -4,6 +4,7 @@ from redis import Redis
 from rq import Retry
 
 from app.core.config import settings
+from app.core.languages import DEFAULT_LANGUAGE, SupportedLanguage
 from app.database.repositories.activity_event_repository import ActivityEventRepository
 from app.database.repositories.autosave_repository import AutosaveRepository
 from app.database.repositories.coding_round_repository import CodingRoundRepository
@@ -311,11 +312,13 @@ class CodingRoundService:
 
     # -- autosave --------------------------------------------------------------
 
-    async def save_autosave(self, round_id: str, student_id: str, problem_id: str, code: str) -> Autosave:
+    async def save_autosave(
+        self, round_id: str, student_id: str, problem_id: str, code: str, language: SupportedLanguage
+    ) -> Autosave:
         session = await self.assert_can_submit(round_id, student_id, problem_id)
         return await self.autosave_repository.upsert_one(
             {"sessionId": session.id, "problemId": problem_id},
-            {"code": code, "updatedAt": datetime.now(timezone.utc)},
+            {"code": code, "language": language.value, "updatedAt": datetime.now(timezone.utc)},
         )
 
     async def get_autosave(self, round_id: str, student_id: str, problem_id: str) -> Autosave | None:
@@ -468,7 +471,14 @@ class CodingRoundService:
             queue = get_queue(QUEUE_AUTO_SUBMIT, self.redis_connection)
             queue.enqueue(
                 submit_code_job,
-                args=(session.student_id, question.problem_id, autosave.code, session.round_id, SubmissionType.AUTO_SUBMIT.value),
+                args=(
+                    session.student_id,
+                    question.problem_id,
+                    autosave.code,
+                    session.round_id,
+                    autosave.language.value,
+                    SubmissionType.AUTO_SUBMIT.value,
+                ),
                 job_timeout=settings.submit_job_timeout_seconds,
                 result_ttl=settings.job_result_ttl_seconds,
                 retry=Retry(max=1),
@@ -571,7 +581,7 @@ class CodingRoundService:
             student_register_number=student.register_number if student else "-",
             problem_id=problem_id,
             problem_title=problem.title if problem else "Unknown problem",
-            language=problem.language if problem else "C",
+            language=autosave.language if autosave else DEFAULT_LANGUAGE,
             code=autosave.code if autosave else None,
             updated_at=autosave.updated_at if autosave else None,
         )

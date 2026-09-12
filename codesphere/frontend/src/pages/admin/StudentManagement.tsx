@@ -262,7 +262,7 @@ export default function StudentManagement() {
                 <Tbody>
                   {filtered?.map((student) => (
                     <Tr key={student.id}>
-                      <Td className="font-medium text-zinc-900 dark:text-white">{student.name}</Td>
+                      <Td className="font-medium text-slate-900 dark:text-white">{student.name}</Td>
                       <Td>{student.registerNumber}</Td>
                       <Td>{student.email}</Td>
                       <Td>{student.class}</Td>
@@ -380,16 +380,16 @@ export default function StudentManagement() {
               {importResult.skipped.length > 0 && ` ${importResult.skipped.length} row(s) skipped.`}
             </p>
             {importResult.createdStudents.length > 0 && (
-              <div className="max-h-48 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+              <div className="max-h-48 overflow-y-auto rounded-md border border-slate-200 dark:border-slate-800">
                 <table className="w-full text-left text-xs">
-                  <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                  <thead className="border-b border-slate-200 text-slate-500 dark:border-slate-800 dark:text-slate-400">
                     <tr>
                       <th className="px-2 py-1.5 font-medium">Name</th>
                       <th className="px-2 py-1.5 font-medium">Email</th>
                       <th className="px-2 py-1.5 font-medium">Temp Password</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {importResult.createdStudents.map((s) => (
                       <tr key={s.id}>
                         <td className="px-2 py-1.5">{s.name}</td>
@@ -403,8 +403,8 @@ export default function StudentManagement() {
             )}
             {importResult.skipped.length > 0 && (
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Skipped rows</p>
-                <ul className="mt-1 flex flex-col gap-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Skipped rows</p>
+                <ul className="mt-1 flex flex-col gap-0.5 text-xs text-slate-500 dark:text-slate-400">
                   {importResult.skipped.map((s) => (
                     <li key={s.row}>
                       Row {s.row}: {s.reason}
@@ -426,9 +426,9 @@ export default function StudentManagement() {
         {resetResult && (
           <p>
             New temporary password for <strong>{resetResult.name}</strong>:{' '}
-            <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono dark:bg-zinc-800">{resetResult.temporaryPassword}</span>
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">{resetResult.temporaryPassword}</span>
             <br />
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
               This is shown only once — share it with the student now. They'll be asked to change it on next login.
             </span>
           </p>
@@ -459,7 +459,7 @@ export default function StudentManagement() {
             <AlertIcon className="h-5 w-5 shrink-0 text-amber-500" />
             <div>
               <p>
-                <span className="font-semibold text-zinc-900 dark:text-white">{pendingDeactivate.name}</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{pendingDeactivate.name}</span>
                 {' · '}
                 {pendingDeactivate.registerNumber} · {pendingDeactivate.email}
               </p>
@@ -496,7 +496,7 @@ export default function StudentManagement() {
             <AlertIcon className="h-5 w-5 shrink-0 text-amber-500" />
             <div>
               <p>
-                <span className="font-semibold text-zinc-900 dark:text-white">{pendingActivate.name}</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{pendingActivate.name}</span>
                 {' · '}
                 {pendingActivate.registerNumber} · {pendingActivate.email}
               </p>
@@ -530,7 +530,7 @@ export default function StudentManagement() {
             <AlertIcon className="h-5 w-5 shrink-0 text-red-500" />
             <div>
               <p>
-                <span className="font-semibold text-zinc-900 dark:text-white">{pendingDelete.name}</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{pendingDelete.name}</span>
                 {' · '}
                 {pendingDelete.registerNumber} · {pendingDelete.email} · {pendingDelete.class}
               </p>
@@ -538,7 +538,7 @@ export default function StudentManagement() {
                 This will permanently remove the student's personal account/profile information. This action cannot
                 be undone.
               </p>
-              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                 Assessment records such as submissions and results will be preserved where required for
                 institutional records.
               </p>

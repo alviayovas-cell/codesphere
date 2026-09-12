@@ -48,19 +48,19 @@ export default function ChangePassword() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 dark:bg-zinc-950">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white">
               <CodeIcon className="h-4 w-4" />
             </span>
-            <span className="text-lg font-semibold text-zinc-900 dark:text-white">CodeSphere</span>
+            <span className="text-lg font-semibold text-slate-900 dark:text-white">CodeSphere</span>
           </div>
           <ThemeToggle showLabels={false} />
         </div>
 
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white">Change Password</h1>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Change Password</h1>
 
         {user?.mustChangePassword && (
           <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">

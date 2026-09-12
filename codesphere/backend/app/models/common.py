@@ -56,11 +56,6 @@ class RoundStatus(str, Enum):
     ENDED = "ended"
 
 
-class LeaderboardVisibility(str, Enum):
-    AFTER_ROUND_ENDS = "after_round_ends"
-    IMMEDIATE = "immediate"
-
-
 class SessionStatus(str, Enum):
     NOT_STARTED = "not_started"
     ACTIVE = "active"

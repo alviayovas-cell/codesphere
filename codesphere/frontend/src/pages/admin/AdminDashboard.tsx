@@ -32,8 +32,8 @@ export default function AdminDashboard() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-      <h1 className="text-xl font-semibold text-zinc-900 dark:text-white sm:text-2xl">Welcome, {user?.name}</h1>
-      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Here's what's happening across CodeSphere.</p>
+      <h1 className="text-xl font-semibold text-slate-900 dark:text-white sm:text-2xl">Welcome, {user?.name}</h1>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Here's what's happening across CodeSphere.</p>
 
       <section className="mt-6">
         {!loaded ? (
@@ -49,20 +49,20 @@ export default function AdminDashboard() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Quick Actions</h2>
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Quick Actions</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {quickLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
-              className="flex items-center gap-3 rounded-lg border border-zinc-200 p-4 transition-colors hover:border-primary-300 dark:border-zinc-800 dark:hover:border-primary-800"
+              className="flex items-center gap-3 rounded-lg border border-slate-200 p-4 transition-colors hover:border-primary-300 dark:border-slate-800 dark:hover:border-primary-800"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-50 text-primary-600 dark:bg-primary-950 dark:text-primary-400">
                 <link.icon className="h-4 w-4" />
               </span>
               <div>
-                <p className="text-sm font-medium text-zinc-900 dark:text-white">{link.label}</p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">{link.description}</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">{link.label}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{link.description}</p>
               </div>
             </Link>
           ))}
@@ -72,17 +72,17 @@ export default function AdminDashboard() {
       {rounds && rounds.length > 0 && (
         <section className="mt-8">
           <div className="flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Recent Coding Rounds</h2>
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Recent Coding Rounds</h2>
             <Link to="/admin/rounds" className="text-xs font-medium text-primary-600 hover:underline dark:text-primary-400">
               View all
             </Link>
           </div>
           <div className="mt-3 flex flex-col gap-2">
             {rounds.slice(0, 3).map((round) => (
-              <div key={round.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-3.5 dark:border-zinc-800">
+              <div key={round.id} className="flex items-center justify-between rounded-lg border border-slate-200 p-3.5 dark:border-slate-800">
                 <div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-white">{round.title}</p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{round.problemIds.length} problems in pool</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{round.title}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{round.problemIds.length} problems in pool</p>
                 </div>
                 <Badge variant={round.status === 'scheduled' ? 'success' : 'neutral'}>{round.status}</Badge>
               </div>

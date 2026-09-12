@@ -14,7 +14,7 @@ class QuestionResultPublic(BaseModel):
     marks: int
     attempted: bool
     verdict: Verdict | None = None
-    score: int
+    score: float
     passed_tests: int = Field(serialization_alias="passedTests")
     total_tests: int = Field(serialization_alias="totalTests")
 
@@ -32,7 +32,7 @@ class RoundResultSummary(BaseModel):
     completed_at: datetime | None = Field(serialization_alias="completedAt")
     total_marks: int = Field(serialization_alias="totalMarks")
     results_available: bool = Field(serialization_alias="resultsAvailable")
-    score: int | None = None
+    score: float | None = None
     rank: int | None = None
     total_participants: int | None = Field(default=None, serialization_alias="totalParticipants")
 
@@ -46,7 +46,7 @@ class RoundResultDetail(BaseModel):
     completed_at: datetime | None = Field(serialization_alias="completedAt")
     total_marks: int = Field(serialization_alias="totalMarks")
     results_available: bool = Field(serialization_alias="resultsAvailable")
-    score: int | None = None
+    score: float | None = None
     rank: int | None = None
     total_participants: int | None = Field(default=None, serialization_alias="totalParticipants")
     questions: list[QuestionResultPublic] | None = None
@@ -59,7 +59,7 @@ class LeaderboardEntry(BaseModel):
     student_id: str = Field(serialization_alias="studentId")
     student_name: str = Field(serialization_alias="studentName")
     student_register_number: str = Field(serialization_alias="studentRegisterNumber")
-    score: int
+    score: float
     total_marks: int = Field(serialization_alias="totalMarks")
     completed_at: datetime | None = Field(serialization_alias="completedAt")
     is_you: bool = Field(default=False, serialization_alias="isYou")
@@ -70,11 +70,10 @@ class LeaderboardEntry(BaseModel):
 class LeaderboardResponse(BaseModel):
     results_available: bool = Field(serialization_alias="resultsAvailable")
     entries: list[LeaderboardEntry]
-    # True when this round's resultConfiguration.leaderboardVisibility is
-    # "immediate" - lets the frontend show a "Live Leaderboard" indicator
-    # and decide whether to poll for updates, without needing a second
-    # request to fetch the round's configuration separately.
-    is_live: bool = Field(default=False, serialization_alias="isLive")
+    # Always true - the leaderboard is always visible immediately, there's
+    # no gated/hidden mode. Kept as a field (rather than removed) so the
+    # frontend's existing live-polling logic needs no changes.
+    is_live: bool = Field(default=True, serialization_alias="isLive")
 
     model_config = {"populate_by_name": True}
 
@@ -86,7 +85,7 @@ class AdminRoundResultEntry(BaseModel):
     student_name: str = Field(serialization_alias="studentName")
     student_register_number: str = Field(serialization_alias="studentRegisterNumber")
     status: SessionStatus
-    score: int
+    score: float
     total_marks: int = Field(serialization_alias="totalMarks")
     rank: int | None = None
     violation_count: int = Field(serialization_alias="violationCount")

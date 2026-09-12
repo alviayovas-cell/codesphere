@@ -21,6 +21,7 @@ from pymongo import MongoClient
 from rq import get_current_job
 
 from app.core.config import settings
+from app.core.languages import DEFAULT_LANGUAGE, LANGUAGES, SupportedLanguage
 from app.models.common import SubmissionType, TestCaseVisibility, Verdict
 from app.services.judge_service import ExecutionResult, JudgeServiceError, SyncJudgeService
 
@@ -60,7 +61,7 @@ def _unreachable_result() -> ExecutionResult:
     )
 
 
-def run_code_job(student_id: str, problem_id: str, code: str) -> dict:
+def run_code_job(student_id: str, problem_id: str, code: str, language: str = DEFAULT_LANGUAGE.value) -> dict:
     """Run Code: execute the student's current editor code against this
     problem's PUBLIC (sample) test cases and report a real verdict from
     comparing actual output to each case's expected output - never just
@@ -80,7 +81,7 @@ def run_code_job(student_id: str, problem_id: str, code: str) -> dict:
     )
     public_cases.sort(key=lambda tc: str(tc["_id"]))
 
-    judge = SyncJudgeService()
+    judge = SyncJudgeService(language_id=LANGUAGES[SupportedLanguage(language)].judge0_id)
 
     if not public_cases:
         # No sample cases to check against - say so plainly rather than
@@ -160,6 +161,7 @@ def submit_code_job(
     problem_id: str,
     code: str,
     round_id: str | None = None,
+    language: str = DEFAULT_LANGUAGE.value,
     submission_type: str = SubmissionType.SUBMIT.value,
 ) -> dict:
     """Submit Code: run every test case (public + hidden), score, and
@@ -191,7 +193,7 @@ def submit_code_job(
     test_cases = list(db.test_cases.find({"problemId": problem_id}))
     test_cases.sort(key=lambda tc: (tc["visibility"] != TestCaseVisibility.PUBLIC.value, str(tc["_id"])))
 
-    judge = SyncJudgeService()
+    judge = SyncJudgeService(language_id=LANGUAGES[SupportedLanguage(language)].judge0_id)
 
     if not test_cases:
         verdict = Verdict.INTERNAL_ERROR
@@ -219,7 +221,11 @@ def submit_code_job(
         )
         compile_output = first.compile_output
 
-    score = problem_doc["marks"] if verdict == Verdict.ACCEPTED else 0
+    # Partial credit: proportional to the fraction of test cases passed,
+    # rounded to the nearest 0.5 mark - not just full marks or zero. A
+    # problem with no test cases configured (total == 0) scores 0 rather
+    # than dividing by zero.
+    score = round((passed / total) * problem_doc["marks"] * 2) / 2 if total > 0 else 0.0
     now = datetime.now(timezone.utc)
 
     inserted = db.submissions.insert_one(
@@ -228,7 +234,7 @@ def submit_code_job(
             "roundId": round_id,
             "problemId": problem_id,
             "code": code,
-            "language": "C",
+            "language": language,
             "submissionType": submission_type,
             "verdict": verdict.value,
             "score": score,

@@ -19,7 +19,7 @@ export default function Tooltip({ label, children }: { label: string; children: 
         <span
           id={id}
           role="tooltip"
-          className="pointer-events-none absolute -top-8 left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded bg-zinc-900 px-2 py-1 text-xs text-white shadow-sm dark:bg-zinc-700"
+          className="pointer-events-none absolute -top-8 left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-xs text-white shadow-sm dark:bg-slate-700"
         >
           {label}
         </span>

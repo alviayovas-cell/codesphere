@@ -69,7 +69,7 @@ export default function RoundSession() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
         <ErrorState message={error} onRetry={load} />
-        <Link to="/student/rounds" className="mt-4 inline-block text-sm text-zinc-500 underline dark:text-zinc-400">
+        <Link to="/student/rounds" className="mt-4 inline-block text-sm text-slate-500 underline dark:text-slate-400">
           Back to rounds
         </Link>
       </div>
@@ -86,19 +86,19 @@ export default function RoundSession() {
       <button
         type="button"
         onClick={() => navigate('/student/rounds')}
-        className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
       >
         <ChevronLeftIcon className="h-4 w-4" /> Back to rounds
       </button>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-white">Coding Round</h1>
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Coding Round</h1>
           <SessionStatusBadge status={session.status} />
         </div>
         {isActive && <Timer seconds={remaining} className="text-base" />}
       </div>
-      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
         {orderedQuestions.length} question{orderedQuestions.length === 1 ? '' : 's'}
       </p>
 
@@ -116,7 +116,7 @@ export default function RoundSession() {
       )}
 
       <div className="mt-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Jump to</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Jump to</p>
         <div className="mt-2">
           <QuestionNavigator
             count={orderedQuestions.length}
@@ -132,9 +132,9 @@ export default function RoundSession() {
           <li key={q.problemId}>
             <Link
               to={`/student/rounds/${roundId}/problems/${q.problemId}`}
-              className="flex items-center justify-between rounded-lg border border-zinc-200 p-3.5 transition-colors hover:border-primary-300 dark:border-zinc-800 dark:hover:border-primary-800"
+              className="flex items-center justify-between rounded-lg border border-slate-200 p-3.5 transition-colors hover:border-primary-300 dark:border-slate-800 dark:hover:border-primary-800"
             >
-              <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Question {q.order}</span>
+              <span className="text-sm font-medium text-slate-800 dark:text-slate-200">Question {q.order}</span>
               <DifficultyBadge difficulty={q.difficulty} />
             </Link>
           </li>

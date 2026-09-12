@@ -5,12 +5,14 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import Analytics from './pages/admin/Analytics'
 import LearningManagement from './pages/admin/LearningManagement'
 import Monitoring from './pages/admin/Monitoring'
+import Plagiarism from './pages/admin/Plagiarism'
 import ProblemAdminDetail from './pages/admin/ProblemAdminDetail'
 import ProblemManagement from './pages/admin/ProblemManagement'
 import RoundManagement from './pages/admin/RoundManagement'
 import StudentManagement from './pages/admin/StudentManagement'
 import ChangePassword from './pages/ChangePassword'
 import Home from './pages/Home'
+import LeaderboardDisplay from './pages/LeaderboardDisplay'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 import StudentDashboard from './pages/student/Dashboard'
@@ -184,6 +186,18 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/admin/plagiarism"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <Plagiarism />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Big-screen leaderboard: no AppShell chrome, meant for a projector.
+          Auth-checked inside the component itself, not via ProtectedRoute. */}
+      <Route path="/leaderboard/display/:roundId" element={<LeaderboardDisplay />} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>

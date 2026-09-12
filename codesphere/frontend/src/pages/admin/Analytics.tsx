@@ -13,7 +13,7 @@ import RankedBarList from '../../components/charts/RankedBarList'
 import { ChartIcon, ClockIcon, CodeIcon, TrophyIcon, UsersIcon } from '../../components/ui/Icons'
 
 const difficultyBarClass: Record<string, string> = {
-  easy: 'bg-green-500 dark:bg-green-400',
+  easy: 'bg-emerald-500 dark:bg-emerald-400',
   medium: 'bg-amber-500 dark:bg-amber-400',
   hard: 'bg-red-500 dark:bg-red-400',
 }
@@ -71,12 +71,12 @@ export default function Analytics() {
             />
           </div>
 
-          <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Submissions - last 14 days</h2>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Every graded Run/Submit attempt, accepted vs. everything else.</p>
+          <div className="mt-6 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Submissions - last 14 days</h2>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Every graded Run/Submit attempt, accepted vs. everything else.</p>
             <div className="mt-3">
               {data.submissionTrend.every((p) => p.accepted + p.other === 0) ? (
-                <p className="py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">No submissions in the last 14 days.</p>
+                <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No submissions in the last 14 days.</p>
               ) : (
                 <SubmissionTrendChart points={data.submissionTrend} />
               )}
@@ -84,9 +84,9 @@ export default function Analytics() {
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Pass rate by difficulty</h2>
-              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Across every attempted problem, grouped by difficulty.</p>
+            <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Pass rate by difficulty</h2>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Across every attempted problem, grouped by difficulty.</p>
               <div className="mt-4">
                 <RankedBarList
                   max={100}
@@ -104,9 +104,9 @@ export default function Analytics() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Learning module engagement</h2>
-              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">Average topic-completion across all students, least-engaged first.</p>
+            <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Learning module engagement</h2>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Average topic-completion across all students, least-engaged first.</p>
               <div className="mt-4">
                 <RankedBarList
                   max={100}
@@ -123,9 +123,9 @@ export default function Analytics() {
             </div>
           </div>
 
-          <div className="mt-6 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Weakest topics</h2>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          <div className="mt-6 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Weakest topics</h2>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
               Pass rate by problem topic, lowest first - a platform-wide signal, not a per-student diagnostic.
             </p>
             <div className="mt-4">
@@ -145,12 +145,12 @@ export default function Analytics() {
           </div>
 
           <div className="mt-6">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Problem performance</h2>
-            <p className="mt-0.5 mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Problem performance</h2>
+            <p className="mt-0.5 mb-3 text-xs text-slate-500 dark:text-slate-400">
               Every attempted problem, most-struggled-with first.
             </p>
             {data.problemPerformance.length === 0 ? (
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">No graded submissions yet.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">No graded submissions yet.</p>
             ) : (
               <Table>
                 <Thead>
@@ -164,7 +164,7 @@ export default function Analytics() {
                 <Tbody>
                   {data.problemPerformance.map((p) => (
                     <Tr key={p.problemId}>
-                      <Td className="font-medium text-zinc-900 dark:text-white">{p.title}</Td>
+                      <Td className="font-medium text-slate-900 dark:text-white">{p.title}</Td>
                       <Td>
                         <DifficultyBadge difficulty={p.difficulty} />
                       </Td>

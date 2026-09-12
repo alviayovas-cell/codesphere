@@ -7,7 +7,7 @@ export default function Card({ className, ...rest }: HTMLAttributes<HTMLDivEleme
   return (
     <div
       className={cn(
-        'rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900',
+        'rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900',
         className,
       )}
       {...rest}

@@ -118,7 +118,7 @@ export default function Leaderboard() {
           {leaderboard?.isLive && leaderboard.resultsAvailable && (
             <div className="mt-3 flex items-center gap-2">
               <Badge variant="primary">Live Leaderboard</Badge>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
                 Rankings update as students submit their solutions.
               </span>
             </div>
@@ -149,14 +149,14 @@ export default function Leaderboard() {
                       key={entry.studentId}
                       className={cn(entry.isYou && 'bg-primary-50/60 dark:bg-primary-950/40')}
                     >
-                      <Td className="font-semibold text-zinc-900 dark:text-white">
+                      <Td className="font-semibold text-slate-900 dark:text-white">
                         {entry.rank <= 3 ? (
                           <Badge variant={entry.rank === 1 ? 'warning' : 'neutral'}>#{entry.rank}</Badge>
                         ) : (
                           entry.rank
                         )}
                       </Td>
-                      <Td className="font-medium text-zinc-900 dark:text-white">
+                      <Td className="font-medium text-slate-900 dark:text-white">
                         {entry.studentName}
                         {entry.isYou && (
                           <span className="ml-1.5 text-xs font-normal text-primary-600 dark:text-primary-400">(you)</span>
@@ -165,7 +165,7 @@ export default function Leaderboard() {
                       <Td>
                         {entry.score} / {entry.totalMarks}
                       </Td>
-                      <Td className="text-zinc-500 dark:text-zinc-400">{formatDateTime(entry.completedAt)}</Td>
+                      <Td className="text-slate-500 dark:text-slate-400">{formatDateTime(entry.completedAt)}</Td>
                     </Tr>
                   ))}
                 </Tbody>

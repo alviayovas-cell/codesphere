@@ -1,11 +1,13 @@
 from pydantic import BaseModel, Field
 
+from app.core.languages import DEFAULT_LANGUAGE, SupportedLanguage
 from app.models.common import Verdict
 
 
 class RunCodeRequest(BaseModel):
     problem_id: str = Field(validation_alias="problemId")
     code: str
+    language: SupportedLanguage = DEFAULT_LANGUAGE
 
     model_config = {"populate_by_name": True}
 
@@ -38,6 +40,7 @@ class SubmitCodeRequest(BaseModel):
     problem_id: str = Field(validation_alias="problemId")
     code: str
     round_id: str | None = Field(default=None, validation_alias="roundId")
+    language: SupportedLanguage = DEFAULT_LANGUAGE
 
     model_config = {"populate_by_name": True}
 
@@ -45,7 +48,7 @@ class SubmitCodeRequest(BaseModel):
 class SubmitCodeResult(BaseModel):
     submission_id: str = Field(serialization_alias="submissionId")
     verdict: Verdict
-    score: int
+    score: float
     passed_tests: int = Field(serialization_alias="passedTests")
     total_tests: int = Field(serialization_alias="totalTests")
     test_case_results: list[TestCaseResult] = Field(serialization_alias="testCaseResults")

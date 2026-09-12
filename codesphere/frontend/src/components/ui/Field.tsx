@@ -2,7 +2,7 @@ import { forwardRef, useId, type InputHTMLAttributes, type SelectHTMLAttributes,
 import { cn } from '../../lib/cn'
 
 export const controlClass =
-  'w-full rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder:text-zinc-500 dark:disabled:bg-zinc-800'
+  'w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500 dark:disabled:bg-slate-800'
 
 interface FieldWrapperProps {
   label?: string
@@ -16,7 +16,7 @@ function FieldWrapper({ label, error, hint, htmlFor, required, children }: Field
   return (
     <div className="flex flex-col gap-1">
       {label && (
-        <label htmlFor={htmlFor} className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+        <label htmlFor={htmlFor} className="text-xs font-medium text-slate-700 dark:text-slate-300">
           {label}
           {required && <span className="text-red-500"> *</span>}
         </label>
@@ -25,7 +25,7 @@ function FieldWrapper({ label, error, hint, htmlFor, required, children }: Field
       {error ? (
         <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
       ) : hint ? (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">{hint}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p>
       ) : null}
     </div>
   )

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
-from app.models.common import Difficulty, LeaderboardVisibility, MongoBaseModel, RoundStatus
+from app.models.common import Difficulty, MongoBaseModel, RoundStatus
 
 
 class QuestionPoolConfiguration(BaseModel):
@@ -26,15 +26,11 @@ class ResultConfiguration(BaseModel):
     show_results_during_round: bool = Field(default=False, alias="showResultsDuringRound")
     show_test_case_count: bool = Field(default=False, alias="showTestCaseCount")
     show_score_immediately: bool = Field(default=False, alias="showScoreImmediately")
-    # Distinct from show_score_immediately (which only ever gates a
-    # student's OWN pending score early) - this gates the *leaderboard*,
-    # which reveals every student's standing. Defaults to the existing
-    # behavior (hidden until round end) so rounds created before this
-    # field existed - it's simply absent from their stored document -
-    # keep working exactly as before via this same Pydantic default.
-    leaderboard_visibility: LeaderboardVisibility = Field(
-        default=LeaderboardVisibility.AFTER_ROUND_ENDS, alias="leaderboardVisibility"
-    )
+    # Note: the leaderboard itself has no configurable visibility - it's
+    # always shown immediately (see ResultsService._leaderboard_available).
+    # A round document created before this field was removed may still
+    # have a stored `leaderboardVisibility` key; Pydantic silently ignores
+    # unknown fields on read, so old documents load fine with no migration.
 
     model_config = {"populate_by_name": True}
 

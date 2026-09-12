@@ -132,7 +132,7 @@ async def autosave_code(
     service: CodingRoundService = Depends(_service),
 ) -> None:
     try:
-        await service.save_autosave(round_id, current_user.id, payload.problem_id, payload.code)
+        await service.save_autosave(round_id, current_user.id, payload.problem_id, payload.code, payload.language)
     except SessionNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except SessionNotActiveError as exc:
@@ -153,7 +153,12 @@ async def get_autosave(
 
     if autosave is None:
         return None
-    return AutosavePublic(problem_id=autosave.problem_id, code=autosave.code, updated_at=autosave.updated_at)
+    return AutosavePublic(
+        problem_id=autosave.problem_id,
+        code=autosave.code,
+        language=autosave.language,
+        updated_at=autosave.updated_at,
+    )
 
 
 @router.post("/{round_id}/activity", response_model=RoundSessionPublic)

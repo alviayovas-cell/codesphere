@@ -74,24 +74,24 @@ export default function Learning() {
               {modules.map((module, index) => (
                 <li key={module.id} className="relative pb-1">
                   {index < modules.length - 1 && (
-                    <span className="absolute left-[15px] top-8 h-[calc(100%-8px)] w-px bg-zinc-200 dark:bg-zinc-800" aria-hidden="true" />
+                    <span className="absolute left-[15px] top-8 h-[calc(100%-8px)] w-px bg-slate-200 dark:bg-slate-800" aria-hidden="true" />
                   )}
                   <button
                     type="button"
                     onClick={() => setActiveModuleId(module.id)}
                     className={cn(
                       'flex w-full items-start gap-3 rounded-md px-2 py-2 text-left transition-colors',
-                      module.id === activeModuleId ? 'bg-primary-50 dark:bg-primary-950' : 'hover:bg-zinc-100 dark:hover:bg-zinc-900',
+                      module.id === activeModuleId ? 'bg-primary-50 dark:bg-primary-950' : 'hover:bg-slate-100 dark:hover:bg-slate-900',
                     )}
                   >
                     <span
                       className={cn(
                         'z-10 mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold',
                         module.completedTopics === module.totalTopics && module.totalTopics > 0
-                          ? 'border-green-500 bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400'
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400'
                           : module.id === activeModuleId
                             ? 'border-primary-600 bg-primary-600 text-white'
-                            : 'border-zinc-300 bg-white text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400',
+                            : 'border-slate-300 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400',
                       )}
                     >
                       {module.completedTopics === module.totalTopics && module.totalTopics > 0 ? (
@@ -104,12 +104,12 @@ export default function Learning() {
                       <p
                         className={cn(
                           'truncate text-sm font-medium',
-                          module.id === activeModuleId ? 'text-primary-700 dark:text-primary-300' : 'text-zinc-800 dark:text-zinc-200',
+                          module.id === activeModuleId ? 'text-primary-700 dark:text-primary-300' : 'text-slate-800 dark:text-slate-200',
                         )}
                       >
                         {module.title}
                       </p>
-                      <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
                         {module.completedTopics}/{module.totalTopics} lessons
                       </p>
                     </div>
@@ -121,20 +121,20 @@ export default function Learning() {
 
           {/* Selected module content */}
           {activeModule && (
-            <div className="rounded-lg border border-zinc-200 p-5 dark:border-zinc-800">
+            <div className="rounded-lg border border-slate-200 p-5 dark:border-slate-800">
               <div className="flex items-baseline justify-between gap-4">
-                <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">{activeModule.title}</h2>
-                <span className="shrink-0 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{activeModule.title}</h2>
+                <span className="shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">
                   {activeModule.completedTopics}/{activeModule.totalTopics} complete
                 </span>
               </div>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{activeModule.description}</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{activeModule.description}</p>
               <ProgressBar
                 percent={activeModule.totalTopics > 0 ? (activeModule.completedTopics / activeModule.totalTopics) * 100 : 0}
                 className="mt-3"
               />
 
-              <ul className="mt-5 flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
+              <ul className="mt-5 flex flex-col divide-y divide-slate-100 dark:divide-slate-800">
                 {activeModule.topics.map((topic) => (
                   <li key={topic.id} className="flex items-center gap-3 py-3">
                     <input
@@ -142,23 +142,23 @@ export default function Learning() {
                       checked={topic.completed}
                       onChange={() => toggleComplete(topic.id, topic.completed)}
                       aria-label={`Mark "${topic.title}" as ${topic.completed ? 'incomplete' : 'complete'}`}
-                      className="h-4 w-4 shrink-0 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600"
+                      className="h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600"
                     />
                     <Link
                       to={`/student/learning/topics/${topic.id}`}
                       className="flex flex-1 items-center justify-between gap-2 text-sm"
                     >
-                      <span className={cn(topic.completed ? 'text-zinc-400 line-through dark:text-zinc-600' : 'text-zinc-800 dark:text-zinc-200')}>
+                      <span className={cn(topic.completed ? 'text-slate-400 line-through dark:text-slate-600' : 'text-slate-800 dark:text-slate-200')}>
                         {topic.title}
                       </span>
-                      <span className="flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+                      <span className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
                         {topic.videoUrl && <PlayIcon className="h-3.5 w-3.5" />}
                       </span>
                     </Link>
                   </li>
                 ))}
                 {activeModule.topics.length === 0 && (
-                  <li className="py-4 text-sm text-zinc-400 dark:text-zinc-500">No topics in this module yet.</li>
+                  <li className="py-4 text-sm text-slate-400 dark:text-slate-500">No topics in this module yet.</li>
                 )}
               </ul>
             </div>

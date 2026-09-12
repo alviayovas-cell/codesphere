@@ -77,7 +77,7 @@ async def run_code(
     queue = get_queue(QUEUE_RUN_CODE, connection)
     job = queue.enqueue(
         run_code_job,
-        args=(current_user.id, payload.problem_id, payload.code),
+        args=(current_user.id, payload.problem_id, payload.code, payload.language.value),
         job_timeout=settings.run_job_timeout_seconds,
         result_ttl=settings.job_result_ttl_seconds,
         retry=Retry(max=1),
@@ -134,7 +134,7 @@ async def submit_code(
     queue = get_queue(QUEUE_FINAL_SUBMIT, connection)
     job = queue.enqueue(
         submit_code_job,
-        args=(current_user.id, payload.problem_id, payload.code, payload.round_id),
+        args=(current_user.id, payload.problem_id, payload.code, payload.round_id, payload.language.value),
         job_timeout=settings.submit_job_timeout_seconds,
         result_ttl=settings.job_result_ttl_seconds,
         retry=Retry(max=1),

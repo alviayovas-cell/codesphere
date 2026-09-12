@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext'
 import * as api from '../../services/api'
 import { ApiError } from '../../services/api'
 import type { JobStatus, ProblemPublic, RoundSessionPublic, RunCodeResult, SubmitCodeResult } from '../../types'
+import { DEFAULT_LANGUAGE, LANGUAGES, LANGUAGE_LIST, type LanguageId } from '../../lib/languages'
 import Button from '../../components/ui/Button'
 import { DifficultyBadge, VerdictBadge } from '../../components/ui/Badge'
 import Tabs from '../../components/ui/Tabs'
@@ -29,10 +30,12 @@ const lockedStatusMessage: Record<string, string> = {
   locked: 'Your assessment was submitted automatically according to the assessment policy.',
 }
 
-const DEFAULT_TEMPLATE = '#include <stdio.h>\n\nint main() {\n    \n    return 0;\n}\n'
+function draftKey(problemId: string, language: LanguageId) {
+  return `codesphere_code_draft_${problemId}_${language}`
+}
 
-function draftKey(problemId: string) {
-  return `codesphere_code_draft_${problemId}`
+function langKey(problemId: string) {
+  return `codesphere_code_lang_${problemId}`
 }
 
 type PanelTab = 'tests' | 'output' | 'errors'
@@ -45,7 +48,8 @@ export default function ProblemDetail() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [roundSession, setRoundSession] = useState<RoundSessionPublic | null>(null)
 
-  const [code, setCode] = useState(DEFAULT_TEMPLATE)
+  const [code, setCode] = useState(LANGUAGES[DEFAULT_LANGUAGE].defaultTemplate)
+  const [language, setLanguage] = useState<LanguageId>(DEFAULT_LANGUAGE)
   const [fullscreen, setFullscreen] = useState(false)
   const [tab, setTab] = useState<PanelTab>('tests')
 
@@ -61,6 +65,8 @@ export default function ProblemDetail() {
   // without needing to be re-registered on every keystroke.
   const codeRef = useRef(code)
   codeRef.current = code
+  const languageRef = useRef(language)
+  languageRef.current = language
   const roundSessionRef = useRef(roundSession)
   roundSessionRef.current = roundSession
 
@@ -77,31 +83,67 @@ export default function ProblemDetail() {
           // not localStorage.
           try {
             const saved = await api.getAutosave(roundId, problemId)
-            if (saved) setCode(saved.code)
+            if (saved) {
+              setLanguage(saved.language as LanguageId)
+              setCode(saved.code)
+            }
           } catch {
-            // No autosave yet, or session not found - keep the default template.
+            // No autosave yet, or session not found - keep the default template/language.
           }
         } else {
           try {
-            const saved = localStorage.getItem(draftKey(problemId))
-            if (saved) setCode(saved)
+            const storedLanguage = localStorage.getItem(langKey(problemId)) as LanguageId | null
+            const initialLanguage = storedLanguage && storedLanguage in LANGUAGES ? storedLanguage : DEFAULT_LANGUAGE
+            setLanguage(initialLanguage)
+            const saved = localStorage.getItem(draftKey(problemId, initialLanguage))
+            setCode(saved ?? LANGUAGES[initialLanguage].defaultTemplate)
           } catch {
-            // localStorage unavailable - fall back to the default template.
+            // localStorage unavailable - fall back to the default template/language.
           }
         }
       })
       .catch((err) => setLoadError(err instanceof ApiError ? err.message : 'Failed to load problem.'))
   }, [problemId, roundId])
 
-  // Practice mode: keep the existing localStorage draft behavior.
+  // Practice mode: keep the existing localStorage draft behavior, now
+  // scoped per-language so switching languages doesn't clobber another
+  // language's in-progress draft for the same problem.
   useEffect(() => {
     if (!problemId || roundId) return
     try {
-      localStorage.setItem(draftKey(problemId), code)
+      localStorage.setItem(draftKey(problemId, language), code)
     } catch {
       // Ignore storage failures (private browsing, quota, etc.) - not critical.
     }
-  }, [problemId, roundId, code])
+  }, [problemId, roundId, language, code])
+
+  /** Called when the student picks a different language: switches the
+   * active language and loads that language's own saved draft (server
+   * autosave in round mode, localStorage in practice mode), falling back
+   * to that language's default template if nothing was saved yet. Round
+   * mode has a single autosave slot per (session, problem) - switching
+   * languages there means starting fresh unless the target language
+   * happens to be the one already saved. */
+  async function handleLanguageChange(newLanguage: LanguageId) {
+    setLanguage(newLanguage)
+    if (!problemId) return
+    if (roundId) {
+      try {
+        const saved = await api.getAutosave(roundId, problemId)
+        setCode(saved && saved.language === newLanguage ? saved.code : LANGUAGES[newLanguage].defaultTemplate)
+      } catch {
+        setCode(LANGUAGES[newLanguage].defaultTemplate)
+      }
+    } else {
+      try {
+        localStorage.setItem(langKey(problemId), newLanguage)
+        const saved = localStorage.getItem(draftKey(problemId, newLanguage))
+        setCode(saved ?? LANGUAGES[newLanguage].defaultTemplate)
+      } catch {
+        setCode(LANGUAGES[newLanguage].defaultTemplate)
+      }
+    }
+  }
 
   useEffect(() => {
     if (!roundId) return
@@ -118,7 +160,7 @@ export default function ProblemDetail() {
 
     function save() {
       if (roundSessionRef.current?.status !== 'active') return
-      api.autosaveCode(roundId!, problemId!, codeRef.current).catch(() => {
+      api.autosaveCode(roundId!, problemId!, codeRef.current, languageRef.current).catch(() => {
         // Best-effort - a failed autosave shouldn't interrupt the student.
       })
     }
@@ -136,7 +178,7 @@ export default function ProblemDetail() {
     if (!roundId || !problemId) return
     if (roundSessionRef.current?.status !== 'active') return
     const timer = setTimeout(() => {
-      api.autosaveCode(roundId, problemId, codeRef.current).catch(() => {})
+      api.autosaveCode(roundId, problemId, codeRef.current, languageRef.current).catch(() => {})
     }, AUTOSAVE_DEBOUNCE_MS)
     return () => clearTimeout(timer)
   }, [code, roundId, problemId])
@@ -285,7 +327,7 @@ export default function ProblemDetail() {
     setRunning(true)
     setJobPhase('queued')
     try {
-      const { jobId } = await api.runCode(problemId, code)
+      const { jobId } = await api.runCode(problemId, code, language)
       const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status), timeoutMs: 145000 })
       if (finalStatus.status === 'failed') {
         setActionError(finalStatus.error ?? 'Run failed. Please try again.')
@@ -319,10 +361,10 @@ export default function ProblemDetail() {
     setJobPhase('queued')
     if (roundId) {
       // Save before final submission (spec section 15) - best-effort, doesn't block the submit itself.
-      await api.autosaveCode(roundId, problemId, code).catch(() => {})
+      await api.autosaveCode(roundId, problemId, code, language).catch(() => {})
     }
     try {
-      const { jobId } = await api.submitCode(problemId, code, roundId)
+      const { jobId } = await api.submitCode(problemId, code, roundId, language)
       const finalStatus = await api.pollJob(jobId, { onTick: (s) => setJobPhase(s.status), timeoutMs: 145000 })
       if (finalStatus.status === 'failed') {
         setActionError(finalStatus.error ?? 'Submission failed. Please try again.')
@@ -353,7 +395,7 @@ export default function ProblemDetail() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
         <ErrorState message={loadError} />
-        <Link to="/student/problems" className="mt-4 inline-block text-sm text-zinc-500 underline dark:text-zinc-400">
+        <Link to="/student/problems" className="mt-4 inline-block text-sm text-slate-500 underline dark:text-slate-400">
           Back to problems
         </Link>
       </div>
@@ -378,36 +420,36 @@ export default function ProblemDetail() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left: problem statement (hidden in fullscreen editor mode) */}
         {!fullscreen && (
-          <div className="w-full overflow-y-auto border-r border-zinc-200 p-5 dark:border-zinc-800 md:w-[45%] lg:w-[40%]">
+          <div className="w-full overflow-y-auto border-r border-slate-200 p-5 dark:border-slate-800 md:w-[45%] lg:w-[40%]">
             {roundId ? (
               <button
                 type="button"
                 onClick={async () => {
                   if (problemId && roundSessionRef.current?.status === 'active') {
-                    await api.autosaveCode(roundId, problemId, codeRef.current).catch(() => {})
+                    await api.autosaveCode(roundId, problemId, codeRef.current, languageRef.current).catch(() => {})
                   }
                   navigate(`/student/rounds/${roundId}`)
                 }}
-                className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
               >
                 <ChevronLeftIcon className="h-4 w-4" /> Back to round
               </button>
             ) : (
-              <Link to="/student/problems" className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
+              <Link to="/student/problems" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
                 <ChevronLeftIcon className="h-4 w-4" /> Back to problems
               </Link>
             )}
 
             <div className="mt-3 flex items-center justify-between gap-3">
-              <h1 className="text-lg font-semibold text-zinc-900 dark:text-white">{problem.title}</h1>
+              <h1 className="text-lg font-semibold text-slate-900 dark:text-white">{problem.title}</h1>
               <div className="flex shrink-0 items-center gap-2">
                 {roundId && roundSession?.status === 'active' && <Timer seconds={remaining} />}
-                <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{problem.marks} marks</span>
+                <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{problem.marks} marks</span>
               </div>
             </div>
             <div className="mt-2 flex items-center gap-2">
               <DifficultyBadge difficulty={problem.difficulty} />
-              <span className="text-xs text-zinc-400 dark:text-zinc-500">{problem.topic}</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">{problem.topic}</span>
             </div>
 
             {roundLocked && (
@@ -421,29 +463,29 @@ export default function ProblemDetail() {
               </div>
             )}
 
-            <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{problem.description}</p>
+            <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-slate-700 dark:text-slate-300">{problem.description}</p>
 
             <div className="mt-4 grid gap-3">
               <div>
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Input Format</h2>
-                <p className="mt-1 whitespace-pre-line text-sm text-zinc-600 dark:text-zinc-300">{problem.inputFormat}</p>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Input Format</h2>
+                <p className="mt-1 whitespace-pre-line text-sm text-slate-600 dark:text-slate-300">{problem.inputFormat}</p>
               </div>
               <div>
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Output Format</h2>
-                <p className="mt-1 whitespace-pre-line text-sm text-zinc-600 dark:text-zinc-300">{problem.outputFormat}</p>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Output Format</h2>
+                <p className="mt-1 whitespace-pre-line text-sm text-slate-600 dark:text-slate-300">{problem.outputFormat}</p>
               </div>
               <div>
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Constraints</h2>
-                <p className="mt-1 whitespace-pre-line text-sm text-zinc-600 dark:text-zinc-300">{problem.constraints}</p>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Constraints</h2>
+                <p className="mt-1 whitespace-pre-line text-sm text-slate-600 dark:text-slate-300">{problem.constraints}</p>
               </div>
             </div>
 
             {problem.examples.map((example, index) => (
-              <div key={index} className="mt-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-                <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500">Example {index + 1} — Input</p>
-                <pre className="mt-1 whitespace-pre-wrap rounded bg-zinc-50 p-2 text-xs dark:bg-zinc-900">{example.input}</pre>
-                <p className="mt-2 text-xs font-medium text-zinc-400 dark:text-zinc-500">Output</p>
-                <pre className="mt-1 whitespace-pre-wrap rounded bg-zinc-50 p-2 text-xs dark:bg-zinc-900">{example.output}</pre>
+              <div key={index} className="mt-3 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                <p className="text-xs font-medium text-slate-400 dark:text-slate-500">Example {index + 1} — Input</p>
+                <pre className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs dark:bg-slate-900">{example.input}</pre>
+                <p className="mt-2 text-xs font-medium text-slate-400 dark:text-slate-500">Output</p>
+                <pre className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs dark:bg-slate-900">{example.output}</pre>
               </div>
             ))}
           </div>
@@ -451,14 +493,24 @@ export default function ProblemDetail() {
 
         {/* Right: editor - replaced with a notice below md, per spec */}
         <div className="hidden flex-1 flex-col md:flex">
-          <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
-            <span className="rounded bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-              Language: C
-            </span>
+          <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 dark:border-slate-800">
+            <select
+              value={language}
+              onChange={(e) => handleLanguageChange(e.target.value as LanguageId)}
+              disabled={roundLocked || running || submitting}
+              aria-label="Programming language"
+              className="rounded border border-slate-200 bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+            >
+              {LANGUAGE_LIST.map((lang) => (
+                <option key={lang.id} value={lang.id}>
+                  {lang.label}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               onClick={() => setFullscreen((f) => !f)}
-              className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+              className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
               aria-label={fullscreen ? 'Exit fullscreen' : 'Fullscreen editor'}
               title={fullscreen ? 'Exit fullscreen' : 'Fullscreen editor'}
             >
@@ -469,7 +521,7 @@ export default function ProblemDetail() {
           <div className="h-[50%] min-h-[220px]">
             <Editor
               height="100%"
-              defaultLanguage="c"
+              language={LANGUAGES[language].monacoId}
               theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
               value={code}
               onChange={(value) => setCode(value ?? '')}
@@ -477,7 +529,7 @@ export default function ProblemDetail() {
             />
           </div>
 
-          <div className="flex flex-1 flex-col overflow-hidden border-t border-zinc-200 dark:border-zinc-800">
+          <div className="flex flex-1 flex-col overflow-hidden border-t border-slate-200 dark:border-slate-800">
             <Tabs
               tabs={[
                 { id: 'tests', label: 'Test Cases' },
@@ -491,12 +543,12 @@ export default function ProblemDetail() {
             <div className="scrollbar-thin flex-1 overflow-y-auto p-3">
               {tab === 'tests' && (
                 <div className="flex flex-col gap-3">
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     Run Code checks your solution against these sample test cases. Submit Code additionally
                     runs hidden test cases and records your score.
                   </p>
                   {problem.publicTestCases.length === 0 ? (
-                    <p className="text-sm text-zinc-400 dark:text-zinc-500">
+                    <p className="text-sm text-slate-400 dark:text-slate-500">
                       This problem has no sample test cases — use Submit Code to have your solution graded.
                     </p>
                   ) : (
@@ -506,37 +558,37 @@ export default function ProblemDetail() {
                         return (
                           <div
                             key={i}
-                            className="rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800"
+                            className="rounded-md border border-slate-200 p-2 text-xs dark:border-slate-800"
                           >
                             <div className="flex items-center gap-2">
-                              <p className="font-medium text-zinc-500 dark:text-zinc-400">Case {i + 1}</p>
+                              <p className="font-medium text-slate-500 dark:text-slate-400">Case {i + 1}</p>
                               {caseResult && (
                                 <span
                                   className={cn(
                                     'flex items-center gap-1 font-medium',
                                     caseResult.verdict === 'accepted'
-                                      ? 'text-green-600 dark:text-green-400'
+                                      ? 'text-emerald-600 dark:text-emerald-400'
                                       : 'text-red-600 dark:text-red-400',
                                   )}
                                 >
                                   <span
                                     className={cn(
                                       'h-1.5 w-1.5 rounded-full',
-                                      caseResult.verdict === 'accepted' ? 'bg-green-500' : 'bg-red-500',
+                                      caseResult.verdict === 'accepted' ? 'bg-emerald-500' : 'bg-red-500',
                                     )}
                                   />
                                   {caseResult.verdict === 'accepted' ? 'Passed' : 'Failed'}
                                 </span>
                               )}
                             </div>
-                            <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                            <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
                               Input
                             </p>
-                            <pre className="mt-0.5 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">{tc.input}</pre>
-                            <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                            <pre className="mt-0.5 whitespace-pre-wrap text-slate-700 dark:text-slate-300">{tc.input}</pre>
+                            <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
                               Expected Output
                             </p>
-                            <pre className="mt-0.5 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
+                            <pre className="mt-0.5 whitespace-pre-wrap text-slate-700 dark:text-slate-300">
                               {tc.expectedOutput}
                             </pre>
                           </div>
@@ -550,19 +602,19 @@ export default function ProblemDetail() {
               {tab === 'output' && (
                 <div>
                   {!runResult && !submitResult && (
-                    <p className="text-sm text-zinc-400 dark:text-zinc-500">Run or submit your code to see output here.</p>
+                    <p className="text-sm text-slate-400 dark:text-slate-500">Run or submit your code to see output here.</p>
                   )}
                   {runResult && (
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <VerdictBadge verdict={runResult.verdict} />
                         {runResult.totalTests > 0 && (
-                          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
                             {runResult.passedTests}/{runResult.totalTests} sample test cases passed
                           </span>
                         )}
                         {runResult.timeSeconds !== null && (
-                          <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
                             {runResult.timeSeconds}s{runResult.memoryKb !== null && ` · ${runResult.memoryKb} KB`}
                           </span>
                         )}
@@ -574,10 +626,10 @@ export default function ProblemDetail() {
                               <span
                                 className={cn(
                                   'h-1.5 w-1.5 shrink-0 rounded-full',
-                                  tc.verdict === 'accepted' ? 'bg-green-500' : 'bg-red-500',
+                                  tc.verdict === 'accepted' ? 'bg-emerald-500' : 'bg-red-500',
                                 )}
                               />
-                              <span className="text-zinc-600 dark:text-zinc-300">
+                              <span className="text-slate-600 dark:text-slate-300">
                                 Test Case {tc.index}: {tc.verdict === 'accepted' ? 'Passed' : 'Failed'}
                               </span>
                             </li>
@@ -586,10 +638,10 @@ export default function ProblemDetail() {
                       )}
                       {runResult.stdout && (
                         <>
-                          <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                          <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
                             Your Output
                           </p>
-                          <pre className="mt-1 whitespace-pre-wrap rounded bg-zinc-50 p-2 text-xs text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+                          <pre className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs text-slate-800 dark:bg-slate-900 dark:text-slate-200">
                             {runResult.stdout}
                           </pre>
                         </>
@@ -599,8 +651,8 @@ export default function ProblemDetail() {
                   {submitResult &&
                     (submitResult.verdict === 'pending' && submitResult.testCaseResults.length === 0 ? (
                       <div>
-                        <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Submitted</p>
-                        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Submitted</p>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                           Results for this round aren't shown until it's over.
                         </p>
                       </div>
@@ -608,7 +660,7 @@ export default function ProblemDetail() {
                       <div>
                         <div className="flex items-center gap-2">
                           <VerdictBadge verdict={submitResult.verdict} />
-                          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
                             Score {submitResult.score} &middot; {submitResult.passedTests}/{submitResult.totalTests} test cases
                           </span>
                         </div>
@@ -618,10 +670,10 @@ export default function ProblemDetail() {
                               <span
                                 className={cn(
                                   'h-1.5 w-1.5 shrink-0 rounded-full',
-                                  tc.verdict === 'accepted' ? 'bg-green-500' : 'bg-red-500',
+                                  tc.verdict === 'accepted' ? 'bg-emerald-500' : 'bg-red-500',
                                 )}
                               />
-                              <span className="text-zinc-600 dark:text-zinc-300">
+                              <span className="text-slate-600 dark:text-slate-300">
                                 Test Case {tc.index}: {tc.verdict === 'accepted' ? 'Passed' : 'Failed'}
                               </span>
                             </li>
@@ -635,7 +687,7 @@ export default function ProblemDetail() {
               {tab === 'errors' && (
                 <div>
                   {!compileError && !runtimeError && !compilerWarnings && (
-                    <p className="text-sm text-zinc-400 dark:text-zinc-500">No errors.</p>
+                    <p className="text-sm text-slate-400 dark:text-slate-500">No errors.</p>
                   )}
                   {compileError && (
                     <>
@@ -666,18 +718,18 @@ export default function ProblemDetail() {
             </div>
 
             {actionError && (
-              <div className="border-t border-zinc-100 px-3 py-2 dark:border-zinc-800">
+              <div className="border-t border-slate-100 px-3 py-2 dark:border-slate-800">
                 <InlineError message={actionError} />
               </div>
             )}
 
             {/* Sticky action bar */}
-            <div className="flex items-center justify-between gap-2 border-t border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
-              <span className="flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+            <div className="flex items-center justify-between gap-2 border-t border-slate-200 px-3 py-2.5 dark:border-slate-800">
+              <span className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
                 {(running || submitting) && jobPhase && (
-                  <>
+                  <span className="flex items-center gap-1.5 text-info-600 dark:text-info-400">
                     <Spinner className="h-3 w-3" /> {jobPhaseLabel[jobPhase]}
-                  </>
+                  </span>
                 )}
               </span>
               <div className="flex gap-2">
@@ -715,7 +767,7 @@ export default function ProblemDetail() {
           <div>
             <p>
               You left the assessment window. This has been recorded as violation{' '}
-              <span className="font-semibold text-zinc-900 dark:text-white">
+              <span className="font-semibold text-slate-900 dark:text-white">
                 {violationWarning?.count} of {violationWarning?.max}
               </span>
               .

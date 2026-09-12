@@ -17,9 +17,9 @@ const base =
 const variants: Record<Variant, string> = {
   primary: 'bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800',
   secondary:
-    'border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800',
+    'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800',
   danger: 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800',
-  ghost: 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800',
+  ghost: 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
 }
 
 const sizes: Record<Size, string> = {

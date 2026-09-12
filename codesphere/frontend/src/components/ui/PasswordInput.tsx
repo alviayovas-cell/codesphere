@@ -21,7 +21,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(fu
   return (
     <div className="flex flex-col gap-1">
       {label && (
-        <label htmlFor={fieldId} className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+        <label htmlFor={fieldId} className="text-xs font-medium text-slate-700 dark:text-slate-300">
           {label}
           {rest.required && <span className="text-red-500"> *</span>}
         </label>
@@ -46,7 +46,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(fu
           aria-label={visible ? 'Hide password' : 'Show password'}
           title={visible ? 'Hide password' : 'Show password'}
           tabIndex={0}
-          className="absolute inset-y-0 right-0 flex items-center px-2.5 text-zinc-400 transition-colors hover:text-zinc-600 focus-visible:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          className="absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400 transition-colors hover:text-slate-600 focus-visible:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
         >
           {visible ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
         </button>
@@ -54,7 +54,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(fu
       {error ? (
         <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
       ) : hint ? (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">{hint}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p>
       ) : null}
     </div>
   )

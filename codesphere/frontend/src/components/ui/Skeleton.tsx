@@ -1,7 +1,7 @@
 import { cn } from '../../lib/cn'
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn('animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-800', className)} />
+  return <div className={cn('animate-pulse rounded-md bg-slate-200 dark:bg-slate-800', className)} />
 }
 
 export function SkeletonText({ lines = 3 }: { lines?: number }) {
@@ -16,7 +16,7 @@ export function SkeletonText({ lines = 3 }: { lines?: number }) {
 
 export function SkeletonCard() {
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
       <Skeleton className="h-4 w-1/3" />
       <div className="mt-3">
         <SkeletonText lines={2} />
@@ -29,7 +29,7 @@ export function SkeletonStatRow({ count = 4 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <div key={i} className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
           <Skeleton className="h-3 w-16" />
           <Skeleton className="mt-2 h-6 w-10" />
         </div>

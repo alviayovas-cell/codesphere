@@ -6,7 +6,7 @@ from app.database.repositories.round_session_repository import RoundSessionRepos
 from app.database.repositories.submission_repository import SubmissionRepository
 from app.database.repositories.user_repository import UserRepository
 from app.models.coding_round import CodingRound
-from app.models.common import LeaderboardVisibility, SessionStatus, SubmissionType, UserRole
+from app.models.common import SessionStatus, SubmissionType, UserRole
 from app.models.problem import Problem
 from app.models.round_session import RoundSession
 from app.models.submission import Submission
@@ -76,11 +76,11 @@ class ResultsService:
         session: RoundSession,
         problems: dict[str, Problem],
         best_submissions: dict[tuple[str, str], Submission],
-    ) -> tuple[int, int, list[QuestionResultPublic]]:
+    ) -> tuple[float, int, list[QuestionResultPublic]]:
         """Returns (score, total_marks, per-question breakdown) for one
         session, purely from already-loaded lookup tables - no DB calls."""
         results: list[QuestionResultPublic] = []
-        score = 0
+        score = 0.0
         total_marks = 0
         for question in session.assigned_questions:
             problem = problems.get(question.problem_id)
@@ -120,22 +120,16 @@ class ResultsService:
         return round_.result_configuration.show_score_immediately
 
     def _leaderboard_available(self, round_: CodingRound) -> bool:
-        """The leaderboard reveals *other* students' standing, so by
-        default it waits for the round's window to fully close -
-        showScoreImmediately only ever applies to a student's own result.
-        A round can opt out of that wait via
-        resultConfiguration.leaderboardVisibility == "immediate", in
-        which case the leaderboard opens the moment the round's window
-        actually starts (not before - "immediate" means "don't make me
-        wait for the end", not "always open") and simply stays available
-        after end_time too, same as the default mode already does."""
-        now = datetime.now(timezone.utc)
-        if round_.result_configuration.leaderboard_visibility == LeaderboardVisibility.IMMEDIATE:
-            return now >= round_.start_time
-        return now >= round_.end_time
+        """The leaderboard is always visible immediately - unlike a
+        student's own pending result (_results_available_to_student
+        above, which withholds an early finisher's score so it can't tip
+        off students still working), the leaderboard has no gated/hidden
+        mode and no admin-configurable option for one. It's visible the
+        moment a round exists and stays visible after the round ends."""
+        return True
 
     def _leaderboard_is_live(self, round_: CodingRound) -> bool:
-        return round_.result_configuration.leaderboard_visibility == LeaderboardVisibility.IMMEDIATE
+        return True
 
     async def _load_round_context(
         self, round_id: str, sessions: list[RoundSession]

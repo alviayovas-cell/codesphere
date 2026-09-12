@@ -74,7 +74,7 @@ export default function ProblemAdminDetail() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
         <ErrorState message={error} onRetry={load} />
-        <Link to="/admin/problems" className="mt-4 inline-block text-sm text-zinc-500 underline dark:text-zinc-400">
+        <Link to="/admin/problems" className="mt-4 inline-block text-sm text-slate-500 underline dark:text-slate-400">
           Back to problems
         </Link>
       </div>
@@ -85,29 +85,29 @@ export default function ProblemAdminDetail() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
-      <Link to="/admin/problems" className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
+      <Link to="/admin/problems" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
         <ChevronLeftIcon className="h-4 w-4" /> Back to problems
       </Link>
 
-      <h1 className="mt-4 text-2xl font-semibold text-zinc-900 dark:text-white">{problem.title}</h1>
-      <div className="mt-1.5 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+      <h1 className="mt-4 text-2xl font-semibold text-slate-900 dark:text-white">{problem.title}</h1>
+      <div className="mt-1.5 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
         <span>{problem.topic}</span>
         <DifficultyBadge difficulty={problem.difficulty} />
         <span>{problem.marks} marks</span>
         {problem.isAssessmentOnly && <Badge variant="warning">Assessment only</Badge>}
       </div>
-      <p className="mt-3 whitespace-pre-line text-sm text-zinc-700 dark:text-zinc-300">{problem.description}</p>
+      <p className="mt-3 whitespace-pre-line text-sm text-slate-700 dark:text-slate-300">{problem.description}</p>
 
-      <label className="mt-3 flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+      <label className="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
         <input
           type="checkbox"
           checked={problem.isAssessmentOnly}
           onChange={handleToggleAssessmentOnly}
-          className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600"
+          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600"
         />
         <span>
           Assessment only
-          <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+          <span className="block text-xs text-slate-500 dark:text-slate-400">
             Hide this problem from the general practice bank - only visible to a student once they've started a round
             it's assigned to.
           </span>
@@ -116,29 +116,29 @@ export default function ProblemAdminDetail() {
 
       {error && <div className="mt-3"><InlineError message={error} /></div>}
 
-      <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+      <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
         Test Cases ({problem.testCases.length})
       </h2>
 
       <div className="mt-3 flex flex-col gap-2">
         {problem.testCases.map((testCase) => (
-          <div key={testCase.id} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+          <div key={testCase.id} className="rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-800">
             <div className="flex items-center justify-between">
               <Badge variant={testCase.visibility === 'hidden' ? 'neutral' : 'success'}>{testCase.visibility}</Badge>
               <Button variant="ghost" size="sm" className="text-red-600 dark:text-red-400" onClick={() => handleDeleteCase(testCase.id)}>
                 Delete
               </Button>
             </div>
-            <pre className="mt-2 whitespace-pre-wrap rounded bg-zinc-50 p-2 text-xs dark:bg-zinc-900">{testCase.input}</pre>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Expected:</p>
-            <pre className="mt-1 whitespace-pre-wrap rounded bg-zinc-50 p-2 text-xs dark:bg-zinc-900">{testCase.expectedOutput}</pre>
+            <pre className="mt-2 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs dark:bg-slate-900">{testCase.input}</pre>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Expected:</p>
+            <pre className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs dark:bg-slate-900">{testCase.expectedOutput}</pre>
           </div>
         ))}
-        {problem.testCases.length === 0 && <p className="text-sm text-zinc-400 dark:text-zinc-500">No test cases yet.</p>}
+        {problem.testCases.length === 0 && <p className="text-sm text-slate-400 dark:text-slate-500">No test cases yet.</p>}
       </div>
 
-      <div className="mt-4 flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-        <h3 className="text-sm font-medium text-zinc-900 dark:text-white">Add Test Case</h3>
+      <div className="mt-4 flex flex-col gap-2 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+        <h3 className="text-sm font-medium text-slate-900 dark:text-white">Add Test Case</h3>
         <Textarea placeholder="Input" value={newCase.input} onChange={(e) => setNewCase({ ...newCase, input: e.target.value })} rows={2} />
         <Textarea
           placeholder="Expected Output"

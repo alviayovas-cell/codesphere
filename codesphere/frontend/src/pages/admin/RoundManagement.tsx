@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as api from '../../services/api'
 import { ApiError } from '../../services/api'
-import type { AdminRoundResultEntry, CodingRoundAdminView, LeaderboardVisibility, ProblemSummary } from '../../types'
+import type { AdminRoundResultEntry, CodingRoundAdminView, ProblemSummary } from '../../types'
 import PageHeader from '../../components/layout/PageHeader'
 import Button from '../../components/ui/Button'
-import { Input, Select, Textarea } from '../../components/ui/Field'
-import { Badge, RoundStatusBadge, SessionStatusBadge } from '../../components/ui/Badge'
+import { Input, Textarea } from '../../components/ui/Field'
+import { RoundStatusBadge, SessionStatusBadge } from '../../components/ui/Badge'
 import { Table, Tbody, Td, Th, Thead, Tr } from '../../components/ui/Table'
 import Modal from '../../components/ui/Modal'
 import { InlineError } from '../../components/ui/ErrorState'
@@ -29,7 +29,6 @@ interface FormState {
   mediumQuestions: string
   hardQuestions: string
   randomizeOrder: boolean
-  leaderboardVisibility: LeaderboardVisibility
 }
 
 const emptyForm: FormState = {
@@ -43,7 +42,6 @@ const emptyForm: FormState = {
   mediumQuestions: '0',
   hardQuestions: '0',
   randomizeOrder: true,
-  leaderboardVisibility: 'after_round_ends',
 }
 
 function toLocalInputValue(iso: string) {
@@ -98,9 +96,6 @@ export default function RoundManagement() {
           mediumQuestions: Number(form.mediumQuestions) || 0,
           hardQuestions: Number(form.hardQuestions) || 0,
           randomizeOrder: form.randomizeOrder,
-        },
-        resultConfiguration: {
-          leaderboardVisibility: form.leaderboardVisibility,
         },
       })
       setForm(emptyForm)
@@ -160,7 +155,7 @@ export default function RoundManagement() {
       {error && <div className="mt-4"><InlineError message={error} /></div>}
 
       {showForm && (
-        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
           <Input placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           <Textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
 
@@ -176,11 +171,11 @@ export default function RoundManagement() {
             </div>
           </div>
 
-          <div className="rounded-md border border-zinc-100 p-3 dark:border-zinc-800">
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+          <div className="rounded-md border border-slate-100 p-3 dark:border-slate-800">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Smart Randomization (optional)
             </p>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Leave all at 0 to assign every selected problem to every student, in order. Set counts to have each
               student get a balanced, randomized combination instead.
             </p>
@@ -194,48 +189,32 @@ export default function RoundManagement() {
               <div className="w-20">
                 <Input label="Hard" type="number" min={0} value={form.hardQuestions} onChange={(e) => setForm({ ...form, hardQuestions: e.target.value })} />
               </div>
-              <label className="flex items-center gap-2 pb-2 text-sm text-zinc-700 dark:text-zinc-300">
+              <label className="flex items-center gap-2 pb-2 text-sm text-slate-700 dark:text-slate-300">
                 <input
                   type="checkbox"
                   checked={form.randomizeOrder}
                   onChange={(e) => setForm({ ...form, randomizeOrder: e.target.checked })}
-                  className="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600"
+                  className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600"
                 />
                 Randomize order
               </label>
             </div>
           </div>
 
-          <div className="w-full max-w-xs">
-            <Select
-              label="Leaderboard Visibility"
-              value={form.leaderboardVisibility}
-              onChange={(e) => setForm({ ...form, leaderboardVisibility: e.target.value as LeaderboardVisibility })}
-            >
-              <option value="after_round_ends">After Round Ends</option>
-              <option value="immediate">Show Immediately</option>
-            </Select>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {form.leaderboardVisibility === 'immediate'
-                ? 'Students can see live rankings as soon as the round starts.'
-                : 'Rankings stay hidden from students until the round’s time window closes.'}
-            </p>
-          </div>
-
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Problems ({form.problemIds.length} selected)
             </p>
-            <div className="mt-1.5 flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md border border-zinc-100 p-2 dark:border-zinc-800">
+            <div className="mt-1.5 flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md border border-slate-100 p-2 dark:border-slate-800">
               {problems?.map((p) => (
-                <label key={p.id} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <label key={p.id} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"
                     checked={form.problemIds.includes(p.id)}
                     onChange={() => toggleProblem(p.id)}
-                    className="h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600"
+                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600"
                   />
-                  {p.title} <span className="text-xs text-zinc-500 dark:text-zinc-400">({p.difficulty}, {p.marks} marks)</span>
+                  {p.title} <span className="text-xs text-slate-500 dark:text-slate-400">({p.difficulty}, {p.marks} marks)</span>
                 </label>
               ))}
             </div>
@@ -262,25 +241,22 @@ export default function RoundManagement() {
 
       <div className="mt-6 flex flex-col gap-3">
         {rounds?.map((round) => (
-          <div key={round.id} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <div key={round.id} className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="font-medium text-zinc-900 dark:text-white">{round.title}</h3>
+              <h3 className="font-medium text-slate-900 dark:text-white">{round.title}</h3>
               <div className="flex items-center gap-1.5">
-                {round.resultConfiguration.leaderboardVisibility === 'immediate' && (
-                  <Badge variant="primary">Live Leaderboard</Badge>
-                )}
                 <RoundStatusBadge status={round.status} />
               </div>
             </div>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{round.description}</p>
-            <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{round.description}</p>
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
               {round.problemIds.length} problem{round.problemIds.length === 1 ? '' : 's'} in pool &middot; {round.durationMinutes} min
               &middot; {toLocalInputValue(round.startTime)} &ndash; {toLocalInputValue(round.endTime)}
             </p>
             {(round.questionPoolConfiguration.easyQuestions > 0 ||
               round.questionPoolConfiguration.mediumQuestions > 0 ||
               round.questionPoolConfiguration.hardQuestions > 0) && (
-              <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                 Smart assignment: {round.questionPoolConfiguration.easyQuestions} easy, {round.questionPoolConfiguration.mediumQuestions} medium,{' '}
                 {round.questionPoolConfiguration.hardQuestions} hard per student
                 {round.questionPoolConfiguration.randomizeOrder ? ', randomized order' : ''}
@@ -293,6 +269,15 @@ export default function RoundManagement() {
               {round.status !== 'draft' && (
                 <Button variant="secondary" size="sm" onClick={() => openResults(round)}>
                   Results
+                </Button>
+              )}
+              {round.status !== 'draft' && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => window.open(`/leaderboard/display/${round.id}`, '_blank')}
+                >
+                  Big Screen
                 </Button>
               )}
               <Button variant="ghost" size="sm" className="text-red-600 dark:text-red-400" onClick={() => handleDelete(round.id)}>
@@ -312,7 +297,7 @@ export default function RoundManagement() {
         {resultsError && <InlineError message={resultsError} />}
         {!resultsError && roundResults === null && <SkeletonText lines={4} />}
         {!resultsError && roundResults !== null && roundResults.length === 0 && (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">No students have started this round yet.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">No students have started this round yet.</p>
         )}
         {!resultsError && roundResults !== null && roundResults.length > 0 && (
           <div className="max-h-96 overflow-y-auto">
@@ -328,9 +313,9 @@ export default function RoundManagement() {
                 {roundResults.map((entry) => (
                   <Tr key={entry.studentId}>
                     <Td>{entry.rank ?? '—'}</Td>
-                    <Td className="font-medium text-zinc-900 dark:text-white">
+                    <Td className="font-medium text-slate-900 dark:text-white">
                       {entry.studentName}
-                      <span className="ml-1.5 text-xs font-normal text-zinc-400 dark:text-zinc-500">
+                      <span className="ml-1.5 text-xs font-normal text-slate-400 dark:text-slate-500">
                         {entry.studentRegisterNumber}
                       </span>
                     </Td>
@@ -340,7 +325,7 @@ export default function RoundManagement() {
                     <Td>
                       {entry.score} / {entry.totalMarks}
                     </Td>
-                    <Td className="text-zinc-500 dark:text-zinc-400">{formatDateTime(entry.completedAt)}</Td>
+                    <Td className="text-slate-500 dark:text-slate-400">{formatDateTime(entry.completedAt)}</Td>
                   </Tr>
                 ))}
               </Tbody>

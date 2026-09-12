@@ -1,5 +1,6 @@
 import type { ComponentType, SVGProps } from 'react'
 import {
+  AlertIcon,
   BookIcon,
   ChartIcon,
   ClockIcon,
@@ -33,4 +34,5 @@ export const adminNav: NavItem[] = [
   { label: 'Coding Rounds', to: '/admin/rounds', icon: ClockIcon },
   { label: 'Monitoring', to: '/admin/monitoring', icon: MonitorIcon },
   { label: 'Analytics', to: '/admin/analytics', icon: ChartIcon },
+  { label: 'Plagiarism', to: '/admin/plagiarism', icon: AlertIcon },
 ]

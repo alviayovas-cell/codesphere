@@ -44,7 +44,7 @@ export default function Modal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-zinc-900/40 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
         onClick={blocking ? undefined : onClose}
         aria-hidden="true"
       />
@@ -52,10 +52,10 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className={`relative w-full ${sizeClass[size]} rounded-lg border border-zinc-200 bg-white p-5 shadow-lg dark:border-zinc-800 dark:bg-zinc-900`}
+        className={`relative w-full ${sizeClass[size]} rounded-lg border border-slate-200 bg-white p-5 shadow-lg dark:border-slate-800 dark:bg-slate-900`}
       >
         <div className="flex items-start justify-between gap-4">
-          <h2 id="modal-title" className="text-base font-semibold text-zinc-900 dark:text-white">
+          <h2 id="modal-title" className="text-base font-semibold text-slate-900 dark:text-white">
             {title}
           </h2>
           {!blocking && onClose && (
@@ -63,7 +63,7 @@ export default function Modal({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="-m-1 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+              className="-m-1 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -71,7 +71,7 @@ export default function Modal({
             </button>
           )}
         </div>
-        <div className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">{children}</div>
+        <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">{children}</div>
         {footer && <div className="mt-5 flex justify-end gap-2">{footer}</div>}
       </div>
     </div>,

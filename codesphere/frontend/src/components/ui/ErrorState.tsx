@@ -35,5 +35,5 @@ export function InlineError({ message }: { message: string }) {
 /** Inline (non-blocking) success text - the confirmation counterpart to
  * InlineError, for actions that don't already show their own result modal. */
 export function InlineSuccess({ message }: { message: string }) {
-  return <p className="text-sm text-green-600 dark:text-green-400">{message}</p>
+  return <p className="text-sm text-emerald-600 dark:text-emerald-400">{message}</p>
 }

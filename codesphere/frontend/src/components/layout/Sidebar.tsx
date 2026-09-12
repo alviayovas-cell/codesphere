@@ -24,12 +24,16 @@ export default function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCl
   return (
     <>
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 bg-zinc-900/40 lg:hidden" onClick={onCloseMobile} aria-hidden="true" />
+        <div className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden" onClick={onCloseMobile} aria-hidden="true" />
       )}
 
+      {/* Fixed dark palette, independent of the app's light/dark theme
+          toggle - the sidebar is always dark, by design (a permanent
+          "dark left, light right" layout), unlike the rest of the app
+          which still follows the user's Light/Dark/System preference. */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex flex-col border-r border-zinc-200 bg-white transition-all duration-150 dark:border-zinc-800 dark:bg-zinc-950',
+          'fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-800 bg-slate-900 transition-all duration-150',
           'lg:static lg:z-auto lg:translate-x-0',
           collapsed ? 'lg:w-[68px]' : 'lg:w-60',
           'w-60',
@@ -41,12 +45,14 @@ export default function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCl
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-600 text-sm font-bold text-white">
               C
             </span>
-            {!collapsed && <span className="truncate text-sm font-semibold text-zinc-900 dark:text-white">CodeSphere</span>}
+            <span className={cn('truncate text-sm font-semibold text-white', collapsed && 'lg:hidden')}>
+              CodeSphere
+            </span>
           </a>
           <button
             type="button"
             onClick={onToggleCollapsed}
-            className="hidden rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 lg:block dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            className="hidden rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 lg:block"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             <ChevronLeftIcon className={cn('h-4 w-4 transition-transform', collapsed && 'rotate-180')} />
@@ -65,36 +71,34 @@ export default function Sidebar({ collapsed, onToggleCollapsed, mobileOpen, onCl
                     cn(
                       'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium transition-colors',
                       isActive
-                        ? 'bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-300'
-                        : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900',
+                        ? 'bg-primary-500/10 text-primary-300'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200',
                     )
                   }
                 >
                   <item.icon className="h-[18px] w-[18px] shrink-0" />
-                  {!collapsed && <span className="truncate">{item.label}</span>}
+                  <span className={cn('truncate', collapsed && 'lg:hidden')}>{item.label}</span>
                 </NavLink>
               </li>
             ))}
           </ul>
         </nav>
 
-        <div className="shrink-0 border-t border-zinc-100 p-3 dark:border-zinc-900">
-          <div className={cn('flex items-center gap-2', collapsed && 'justify-center')}>
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+        <div className="shrink-0 border-t border-slate-800 p-3">
+          <div className={cn('flex items-center gap-2', collapsed && 'lg:justify-center')}>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-slate-200">
               {user?.name?.charAt(0).toUpperCase() ?? '?'}
             </span>
-            {!collapsed && (
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">{user?.name}</p>
-                <p className="truncate text-xs capitalize text-zinc-500 dark:text-zinc-400">{user?.role}</p>
-              </div>
-            )}
+            <div className={cn('min-w-0 flex-1', collapsed && 'lg:hidden')}>
+              <p className="truncate text-sm font-medium text-slate-100">{user?.name}</p>
+              <p className="truncate text-xs capitalize text-slate-400">{user?.role}</p>
+            </div>
             <button
               type="button"
               onClick={handleLogout}
               aria-label="Log out"
               title="Log out"
-              className="shrink-0 rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+              className="shrink-0 rounded p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
             >
               <LogoutIcon className="h-4 w-4" />
             </button>

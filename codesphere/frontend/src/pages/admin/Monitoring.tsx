@@ -21,6 +21,7 @@ import { InlineError } from '../../components/ui/ErrorState'
 import EmptyState from '../../components/ui/EmptyState'
 import { SkeletonText } from '../../components/ui/Skeleton'
 import { MonitorIcon } from '../../components/ui/Icons'
+import { LANGUAGES, type LanguageId } from '../../lib/languages'
 
 const eventTypeLabel: Record<ActivityEventType, string> = {
   visibility_hidden: 'Left tab / window minimized',
@@ -207,7 +208,7 @@ export default function Monitoring() {
                 <Tbody>
                   {sessions.map((session) => (
                     <Tr key={session.sessionId}>
-                      <Td className="font-medium text-zinc-900 dark:text-white">{session.studentName}</Td>
+                      <Td className="font-medium text-slate-900 dark:text-white">{session.studentName}</Td>
                       <Td>{session.studentRegisterNumber}</Td>
                       <Td>
                         <SessionStatusBadge status={session.status} />
@@ -216,7 +217,7 @@ export default function Monitoring() {
                         {session.violationCount > 0 ? (
                           <Badge variant="warning">{session.violationCount}</Badge>
                         ) : (
-                          <span className="text-zinc-400 dark:text-zinc-500">0</span>
+                          <span className="text-slate-400 dark:text-slate-500">0</span>
                         )}
                       </Td>
                       <Td>{formatDateTime(session.startedAt)}</Td>
@@ -261,18 +262,18 @@ export default function Monitoring() {
         {activityError && <InlineError message={activityError} />}
         {!activityError && activity === null && <SkeletonText lines={3} />}
         {!activityError && activity !== null && activity.length === 0 && (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">No activity events recorded for this session.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">No activity events recorded for this session.</p>
         )}
         {!activityError && activity !== null && activity.length > 0 && (
-          <div className="max-h-72 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+          <div className="max-h-72 overflow-y-auto rounded-md border border-slate-200 dark:border-slate-800">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+              <thead className="border-b border-slate-200 text-slate-500 dark:border-slate-800 dark:text-slate-400">
                 <tr>
                   <th className="px-2 py-1.5 font-medium">Event</th>
                   <th className="px-2 py-1.5 font-medium">Time</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {activity.map((event) => (
                   <tr key={event.id}>
                     <td className="px-2 py-1.5">{eventTypeLabel[event.eventType] ?? event.eventType}</td>
@@ -328,32 +329,34 @@ export default function Monitoring() {
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
               <div>
-                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Student</dt>
-                <dd className="text-zinc-700 dark:text-zinc-200">{codeSession.studentName}</dd>
+                <dt className="font-medium text-slate-400 dark:text-slate-500">Student</dt>
+                <dd className="text-slate-700 dark:text-slate-200">{codeSession.studentName}</dd>
               </div>
               <div>
-                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Register Number</dt>
-                <dd className="text-zinc-700 dark:text-zinc-200">{codeSession.studentRegisterNumber}</dd>
+                <dt className="font-medium text-slate-400 dark:text-slate-500">Register Number</dt>
+                <dd className="text-slate-700 dark:text-slate-200">{codeSession.studentRegisterNumber}</dd>
               </div>
               <div>
-                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Problem</dt>
-                <dd className="text-zinc-700 dark:text-zinc-200">
+                <dt className="font-medium text-slate-400 dark:text-slate-500">Problem</dt>
+                <dd className="text-slate-700 dark:text-slate-200">
                   {codeView?.problemTitle ??
                     codeSession.assignedProblems.find((p) => p.problemId === codeProblemId)?.title ??
                     '—'}
                 </dd>
               </div>
               <div>
-                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Language</dt>
-                <dd className="text-zinc-700 dark:text-zinc-200">{codeView?.language ?? 'C'}</dd>
+                <dt className="font-medium text-slate-400 dark:text-slate-500">Language</dt>
+                <dd className="text-slate-700 dark:text-slate-200">
+                  {LANGUAGES[codeView?.language as LanguageId]?.label ?? codeView?.language ?? 'C'}
+                </dd>
               </div>
               <div>
-                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Status</dt>
-                <dd className="text-zinc-700 dark:text-zinc-200">Latest Saved Code</dd>
+                <dt className="font-medium text-slate-400 dark:text-slate-500">Status</dt>
+                <dd className="text-slate-700 dark:text-slate-200">Latest Saved Code</dd>
               </div>
               <div>
-                <dt className="font-medium text-zinc-400 dark:text-zinc-500">Last Saved</dt>
-                <dd className="text-zinc-700 dark:text-zinc-200">
+                <dt className="font-medium text-slate-400 dark:text-slate-500">Last Saved</dt>
+                <dd className="text-slate-700 dark:text-slate-200">
                   {codeView?.updatedAt ? formatDateTime(codeView.updatedAt) : 'Not saved yet'}
                 </dd>
               </div>
@@ -362,22 +365,22 @@ export default function Monitoring() {
             {codeError && <InlineError message={codeError} />}
 
             {!codeError && codeLoading && (
-              <div className="flex items-center gap-2 py-6 text-sm text-zinc-500 dark:text-zinc-400">
+              <div className="flex items-center gap-2 py-6 text-sm text-slate-500 dark:text-slate-400">
                 <Spinner className="h-4 w-4" /> Loading code...
               </div>
             )}
 
             {!codeError && !codeLoading && codeView && codeView.code === null && (
-              <p className="rounded-md border border-dashed border-zinc-300 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+              <p className="rounded-md border border-dashed border-slate-300 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
                 No code has been saved yet.
               </p>
             )}
 
             {!codeError && !codeLoading && codeView && codeView.code !== null && (
-              <div className="overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
+              <div className="overflow-hidden rounded-md border border-slate-200 dark:border-slate-800">
                 <Editor
                   height="420px"
-                  language={(codeView.language || 'c').toLowerCase()}
+                  language={LANGUAGES[codeView.language as LanguageId]?.monacoId ?? 'plaintext'}
                   theme={resolvedTheme === 'dark' ? 'vs-dark' : 'light'}
                   value={codeView.code}
                   options={{

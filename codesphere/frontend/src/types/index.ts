@@ -179,13 +179,10 @@ export interface AssessmentConfig {
   autoSubmitEnabled: boolean
 }
 
-export type LeaderboardVisibility = 'after_round_ends' | 'immediate'
-
 export interface ResultConfig {
   showResultsDuringRound: boolean
   showTestCaseCount: boolean
   showScoreImmediately: boolean
-  leaderboardVisibility: LeaderboardVisibility
 }
 
 export interface CodingRoundAdminView {
@@ -224,6 +221,7 @@ export interface RoundSessionPublic {
 export interface AutosavePublic {
   problemId: string
   code: string
+  language: string
   updatedAt: string
 }
 
@@ -327,6 +325,32 @@ export interface AdminRoundResultEntry {
   rank: number | null
   violationCount: number
   completedAt: string | null
+}
+
+export interface PlagiarismPair {
+  submissionAId: string
+  studentAId: string
+  studentAName: string
+  submissionBId: string
+  studentBId: string
+  studentBName: string
+  similarity: number
+  language: string
+}
+
+export interface ProblemPlagiarismGroup {
+  problemId: string
+  problemTitle: string
+  pairs: PlagiarismPair[]
+}
+
+export interface SubmissionCodeView {
+  submissionId: string
+  studentName: string
+  language: string
+  code: string
+  score: number
+  verdict: Verdict
 }
 
 export interface OverviewStats {

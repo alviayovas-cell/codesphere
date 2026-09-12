@@ -8,7 +8,7 @@ interface ActivityItemProps {
 }
 
 const accentClass: Record<NonNullable<ActivityItemProps['accent']>, string> = {
-  success: 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400',
+  success: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400',
   primary: 'bg-primary-50 text-primary-600 dark:bg-primary-950 dark:text-primary-400',
   warning: 'bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400',
 }
@@ -20,8 +20,8 @@ export default function ActivityItem({ icon: Icon, title, meta, accent = 'primar
         <Icon className="h-3.5 w-3.5" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-zinc-700 dark:text-zinc-300">{title}</p>
-        {meta && <p className="text-xs text-zinc-400 dark:text-zinc-500">{meta}</p>}
+        <p className="text-sm text-slate-700 dark:text-slate-300">{title}</p>
+        {meta && <p className="text-xs text-slate-400 dark:text-slate-500">{meta}</p>}
       </div>
     </li>
   )

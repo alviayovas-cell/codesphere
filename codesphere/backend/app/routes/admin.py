@@ -34,6 +34,7 @@ from app.schemas.admin import PasswordResetResponse, StudentCreate, StudentImpor
 from app.schemas.analytics import AnalyticsOverview
 from app.schemas.auth import UserPublic, to_user_public
 from app.schemas.coding_round import CodingRoundAdminView, CodingRoundCreate, CodingRoundUpdate
+from app.schemas.plagiarism import ProblemPlagiarismGroup, SubmissionCodeView
 from app.schemas.results import AdminRoundResultEntry, LeaderboardResponse
 from app.schemas.learning import (
     LearningModuleCreate,
@@ -70,6 +71,7 @@ from app.services.problem_service import (
     ProblemService,
     TestCaseNotFoundError,
 )
+from app.services.plagiarism_service import PlagiarismService
 from app.services.results_service import ResultsService
 from app.services.student_service import (
     DuplicateEmailError,
@@ -130,6 +132,15 @@ def _results_service(
     return ResultsService(
         round_repository, session_repository, submission_repository, problem_repository, user_repository
     )
+
+
+def _plagiarism_service(
+    round_repository: CodingRoundRepository = Depends(get_coding_round_repository),
+    problem_repository: ProblemRepository = Depends(get_problem_repository),
+    submission_repository: SubmissionRepository = Depends(get_submission_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> PlagiarismService:
+    return PlagiarismService(round_repository, problem_repository, submission_repository, user_repository)
 
 
 def _analytics_service(
@@ -664,3 +675,41 @@ async def get_analytics(
     service: AnalyticsService = Depends(_analytics_service),
 ) -> AnalyticsOverview:
     return await service.get_analytics()
+
+
+@router.get("/rounds/{round_id}/plagiarism", response_model=list[ProblemPlagiarismGroup])
+async def get_round_plagiarism(
+    round_id: str,
+    _: User = Depends(get_current_admin_user),
+    service: PlagiarismService = Depends(_plagiarism_service),
+) -> list[ProblemPlagiarismGroup]:
+    """Per problem, every pair of students whose best submission's
+    normalized source is similar enough to flag for manual review (see
+    PlagiarismService's docstring for the method and its limits)."""
+    try:
+        return await service.detect_round_plagiarism(round_id)
+    except RoundNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/submissions/{submission_id}/code", response_model=SubmissionCodeView)
+async def get_submission_code(
+    submission_id: str,
+    _: User = Depends(get_current_admin_user),
+    submission_repository: SubmissionRepository = Depends(get_submission_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> SubmissionCodeView:
+    """Full source of one submission - used by the plagiarism compare view.
+    Admin-only; never exposed to students."""
+    submission = await submission_repository.find_by_id(submission_id)
+    if submission is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+    student = await user_repository.find_by_id(submission.student_id)
+    return SubmissionCodeView(
+        submission_id=submission.id,
+        student_name=student.name if student else "Unknown student",
+        language=submission.language,
+        code=submission.code,
+        score=submission.score,
+        verdict=submission.verdict.value,
+    )

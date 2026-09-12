@@ -3,6 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.core.languages import DEFAULT_LANGUAGE, SupportedLanguage
 from app.models.common import ActivityEventType, SessionStatus
 
 
@@ -59,7 +60,7 @@ class StudentAutosaveView(BaseModel):
     student_register_number: str = Field(serialization_alias="studentRegisterNumber")
     problem_id: str = Field(serialization_alias="problemId")
     problem_title: str = Field(serialization_alias="problemTitle")
-    language: str
+    language: SupportedLanguage = DEFAULT_LANGUAGE
     code: str | None = None
     updated_at: datetime | None = Field(default=None, serialization_alias="updatedAt")
 

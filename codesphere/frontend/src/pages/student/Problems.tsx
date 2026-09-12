@@ -104,7 +104,7 @@ export default function Problems() {
                   {filtered.map((problem) => (
                     <Tr key={problem.id}>
                       <Td>
-                        <Link to={`/student/problems/${problem.id}`} className="font-medium text-zinc-900 hover:text-primary-700 dark:text-white dark:hover:text-primary-400">
+                        <Link to={`/student/problems/${problem.id}`} className="font-medium text-slate-900 hover:text-primary-700 dark:text-white dark:hover:text-primary-400">
                           {problem.title}
                         </Link>
                       </Td>

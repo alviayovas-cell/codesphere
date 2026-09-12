@@ -36,7 +36,7 @@ export default function Dropdown({ trigger, children, align = 'right' }: Dropdow
         <div
           role="menu"
           className={cn(
-            'absolute z-40 mt-2 min-w-[10rem] rounded-md border border-zinc-200 bg-white py-1 shadow-md dark:border-zinc-800 dark:bg-zinc-900',
+            'absolute z-40 mt-2 min-w-[10rem] rounded-md border border-slate-200 bg-white py-1 shadow-md dark:border-slate-800 dark:bg-slate-900',
             align === 'right' ? 'right-0' : 'left-0',
           )}
           onClick={() => setOpen(false)}
@@ -58,7 +58,7 @@ export function DropdownItem({
       type="button"
       role="menuitem"
       className={cn(
-        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800',
+        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800',
         className,
       )}
       {...rest}

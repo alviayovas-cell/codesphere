@@ -8,7 +8,7 @@ export default function ProgressBar({ percent, className }: { percent: number; c
       aria-valuenow={clamped}
       aria-valuemin={0}
       aria-valuemax={100}
-      className={cn('h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800', className)}
+      className={cn('h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800', className)}
     >
       <div className="h-full rounded-full bg-primary-600 transition-all duration-300" style={{ width: `${clamped}%` }} />
     </div>

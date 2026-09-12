@@ -24,7 +24,7 @@ const DEFAULT_BAR_CLASS = 'bg-primary-500 dark:bg-primary-400'
 
 export default function RankedBarList({ items, max, formatValue, emptyMessage }: RankedBarListProps) {
   if (items.length === 0) {
-    return <p className="text-sm text-zinc-500 dark:text-zinc-400">{emptyMessage ?? 'No data yet.'}</p>
+    return <p className="text-sm text-slate-500 dark:text-slate-400">{emptyMessage ?? 'No data yet.'}</p>
   }
 
   const scale = max ?? Math.max(...items.map((i) => i.value), 1)
@@ -36,18 +36,18 @@ export default function RankedBarList({ items, max, formatValue, emptyMessage }:
         const widthPercent = scale > 0 ? Math.min(100, Math.max(0, (item.value / scale) * 100)) : 0
         return (
           <li key={item.key} className="flex items-center gap-3" title={item.tooltip}>
-            <span className="w-32 shrink-0 truncate text-sm text-zinc-700 dark:text-zinc-300" title={item.label}>
+            <span className="w-32 shrink-0 truncate text-sm text-slate-700 dark:text-slate-300" title={item.label}>
               {item.label}
             </span>
-            <span className="h-3 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <span className="h-3 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
               <span
                 className={cn('block h-full rounded-full transition-[width]', item.barClassName ?? DEFAULT_BAR_CLASS)}
                 style={{ width: `${widthPercent}%` }}
               />
             </span>
-            <span className="w-20 shrink-0 text-right text-sm font-medium text-zinc-900 dark:text-white">
+            <span className="w-20 shrink-0 text-right text-sm font-medium text-slate-900 dark:text-white">
               {format(item.value)}
-              {item.detail && <span className="ml-1 font-normal text-zinc-400 dark:text-zinc-500">{item.detail}</span>}
+              {item.detail && <span className="ml-1 font-normal text-slate-400 dark:text-slate-500">{item.detail}</span>}
             </span>
           </li>
         )

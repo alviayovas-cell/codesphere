@@ -164,11 +164,20 @@ async def _seed():
     round_doc = await mongodb_module.get_database()["coding_rounds"].find_one({})
     sync_db.coding_rounds.insert_one(round_doc)
 
+    from rq.timeouts import TimerDeathPenalty
     from rq.worker import SimpleWorker
     SimpleWorker._install_signal_handlers = lambda self: None
 
     def _run_worker():
-        SimpleWorker(queue_config_module.QUEUE_NAMES_BY_PRIORITY, connection=fake_redis).work(with_scheduler=False)
+        worker = SimpleWorker(queue_config_module.QUEUE_NAMES_BY_PRIORITY, connection=fake_redis)
+        # RQ's default death penalty arms a SIGALRM handler via signal.signal(),
+        # which only works in a process's main thread - every job on these
+        # worker THREADS would fail instantly otherwise (real deployments
+        # don't hit this: run_worker.py's real worker runs as its own
+        # process's main thread). Same fix as run_worker.py's own
+        # start_inline_worker_thread() for the identical reason.
+        worker.death_penalty_class = TimerDeathPenalty
+        worker.work(with_scheduler=False)
 
     for _ in range(3):  # a few worker threads, like several `run_worker.py` processes
         threading.Thread(target=_run_worker, daemon=True).start()

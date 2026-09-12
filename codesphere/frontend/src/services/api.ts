@@ -14,6 +14,7 @@ import type {
   LearningTopic,
   ProblemAdminView,
   ProblemPublic,
+  ProblemPlagiarismGroup,
   ProblemSummary,
   ProgressSummary,
   QuestionPoolConfig,
@@ -23,10 +24,12 @@ import type {
   RoundSessionPublic,
   SessionMonitorSummary,
   StudentAutosaveView,
+  SubmissionCodeView,
   TestCaseAdminView,
   TestCaseVisibility,
   User,
 } from '../types'
+import type { LanguageId } from '../lib/languages'
 
 const rawApiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api').trim().replace(/\/+$/, '')
 const API_BASE_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`
@@ -364,21 +367,22 @@ export function deleteTestCase(testCaseId: string): Promise<void> {
 // queue (spec section 12) and return immediately. Use pollJob to wait for
 // the result.
 
-export function runCode(problemId: string, code: string): Promise<JobEnqueuedResponse> {
+export function runCode(problemId: string, code: string, language: LanguageId): Promise<JobEnqueuedResponse> {
   return request<JobEnqueuedResponse>('/code/run', {
     method: 'POST',
-    body: JSON.stringify({ problemId, code }),
+    body: JSON.stringify({ problemId, code, language }),
   })
 }
 
 export function submitCode(
   problemId: string,
   code: string,
-  roundId?: string,
+  roundId: string | undefined,
+  language: LanguageId,
 ): Promise<JobEnqueuedResponse> {
   return request<JobEnqueuedResponse>('/code/submit', {
     method: 'POST',
-    body: JSON.stringify({ problemId, code, roundId }),
+    body: JSON.stringify({ problemId, code, roundId, language }),
   })
 }
 
@@ -473,10 +477,15 @@ export function deleteRound(roundId: string): Promise<void> {
 
 // -- Autosave (student-facing, during an active round) -----------------------
 
-export function autosaveCode(roundId: string, problemId: string, code: string): Promise<void> {
+export function autosaveCode(
+  roundId: string,
+  problemId: string,
+  code: string,
+  language: LanguageId,
+): Promise<void> {
   return request<void>(`/rounds/${roundId}/autosave`, {
     method: 'POST',
-    body: JSON.stringify({ problemId, code }),
+    body: JSON.stringify({ problemId, code, language }),
   })
 }
 
@@ -554,4 +563,14 @@ export function getAdminRoundLeaderboard(roundId: string): Promise<LeaderboardRe
 
 export function getAnalytics(): Promise<AnalyticsOverview> {
   return request<AnalyticsOverview>('/admin/analytics')
+}
+
+// -- Plagiarism detection (admin) --------------------------------------------
+
+export function getRoundPlagiarism(roundId: string): Promise<ProblemPlagiarismGroup[]> {
+  return request<ProblemPlagiarismGroup[]>(`/admin/rounds/${roundId}/plagiarism`)
+}
+
+export function getSubmissionCode(submissionId: string): Promise<SubmissionCodeView> {
+  return request<SubmissionCodeView>(`/admin/submissions/${submissionId}/code`)
 }

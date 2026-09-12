@@ -114,8 +114,8 @@ export default function LearningManagement() {
       {error && <div className="mt-4"><InlineError message={error} /></div>}
 
       {showModuleForm && (
-        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-          <h2 className="text-sm font-medium text-zinc-900 dark:text-white">New Module</h2>
+        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+          <h2 className="text-sm font-medium text-slate-900 dark:text-white">New Module</h2>
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="flex-1">
               <Input placeholder="Title" value={newModule.title} onChange={(e) => setNewModule({ ...newModule, title: e.target.value })} />
@@ -152,13 +152,13 @@ export default function LearningManagement() {
 
       <div className="mt-6 flex flex-col gap-4">
         {modules?.map((module) => (
-          <div key={module.id} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <div key={module.id} className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="font-medium text-zinc-900 dark:text-white">
+                <h3 className="font-medium text-slate-900 dark:text-white">
                   {module.order}. {module.title}
                 </h3>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">{module.description}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{module.description}</p>
               </div>
               <div className="flex shrink-0 gap-2">
                 <Button variant="ghost" size="sm" onClick={() => setTopicFormFor(topicFormFor === module.id ? null : module.id)}>
@@ -171,7 +171,7 @@ export default function LearningManagement() {
             </div>
 
             {topicFormFor === module.id && (
-              <div className="mt-3 flex flex-col gap-2 rounded-md border border-zinc-100 p-3 dark:border-zinc-800">
+              <div className="mt-3 flex flex-col gap-2 rounded-md border border-slate-100 p-3 dark:border-slate-800">
                 <Input placeholder="Topic title" value={newTopic.title} onChange={(e) => setNewTopic({ ...newTopic, title: e.target.value })} />
                 <Input placeholder="Description" value={newTopic.description} onChange={(e) => setNewTopic({ ...newTopic, description: e.target.value })} />
                 <Input
@@ -196,8 +196,8 @@ export default function LearningManagement() {
 
             <ul className="mt-3 flex flex-col gap-1">
               {module.topics.map((topic) => (
-                <li key={topic.id} className="flex items-center justify-between rounded-md border border-zinc-100 px-3 py-2 text-sm dark:border-zinc-800">
-                  <span className="text-zinc-700 dark:text-zinc-300">
+                <li key={topic.id} className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2 text-sm dark:border-slate-800">
+                  <span className="text-slate-700 dark:text-slate-300">
                     {topic.order}. {topic.title}
                   </span>
                   <Button variant="ghost" size="sm" className="text-red-600 dark:text-red-400" onClick={() => handleDeleteTopic(topic.id)}>
@@ -205,7 +205,7 @@ export default function LearningManagement() {
                   </Button>
                 </li>
               ))}
-              {module.topics.length === 0 && <li className="text-sm text-zinc-400 dark:text-zinc-500">No topics yet.</li>}
+              {module.topics.length === 0 && <li className="text-sm text-slate-400 dark:text-slate-500">No topics yet.</li>}
             </ul>
           </div>
         ))}

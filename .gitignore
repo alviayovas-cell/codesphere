@@ -1,0 +1,6 @@
+# Claude Code local tool config - not part of the application
+.claude/
+
+# Self-hosted Judge0 config for local testing - contains real generated
+# secrets (Redis/Postgres passwords, Rails secret key base). Never commit.
+judge0-selfhosted/

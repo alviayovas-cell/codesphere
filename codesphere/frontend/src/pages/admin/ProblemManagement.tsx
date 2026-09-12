@@ -105,7 +105,7 @@ export default function ProblemManagement() {
       {error && <div className="mt-4"><InlineError message={error} /></div>}
 
       {showForm && (
-        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
           <Input placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           <div className="flex gap-2">
             <div className="flex-1">
@@ -126,16 +126,16 @@ export default function ProblemManagement() {
           <Textarea placeholder="Input Format" value={form.inputFormat} onChange={(e) => setForm({ ...form, inputFormat: e.target.value })} rows={2} />
           <Textarea placeholder="Output Format" value={form.outputFormat} onChange={(e) => setForm({ ...form, outputFormat: e.target.value })} rows={2} />
           <Textarea placeholder="Constraints" value={form.constraints} onChange={(e) => setForm({ ...form, constraints: e.target.value })} rows={2} />
-          <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+          <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
             <input
               type="checkbox"
               checked={form.isAssessmentOnly}
               onChange={(e) => setForm({ ...form, isAssessmentOnly: e.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-primary-600 focus:ring-primary-500 dark:border-zinc-600"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600"
             />
             <span>
               Assessment only
-              <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="block text-xs text-slate-500 dark:text-slate-400">
                 Hide this problem from the general practice bank - only visible to a student once they've started a
                 round it's assigned to.
               </span>
@@ -144,7 +144,7 @@ export default function ProblemManagement() {
           <Button variant="primary" className="self-start" onClick={handleCreate} disabled={!canSubmit}>
             Create
           </Button>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             After creating, open the problem to add public and hidden test cases.
           </p>
         </div>
@@ -173,7 +173,7 @@ export default function ProblemManagement() {
                 {problems.map((problem) => (
                   <Tr key={problem.id}>
                     <Td>
-                      <Link to={`/admin/problems/${problem.id}`} className="font-medium text-zinc-900 hover:text-primary-700 dark:text-white dark:hover:text-primary-400">
+                      <Link to={`/admin/problems/${problem.id}`} className="font-medium text-slate-900 hover:text-primary-700 dark:text-white dark:hover:text-primary-400">
                         {problem.title}
                       </Link>
                     </Td>

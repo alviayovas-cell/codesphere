@@ -42,7 +42,7 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Hero panel - the one place a subtle gradient is used, per the design brief. */}
       <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-primary-700 via-primary-600 to-secondary-600 p-10 text-white lg:flex">
         <div className="flex items-center gap-2">
@@ -69,13 +69,13 @@ export default function Login() {
               <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white lg:hidden">
                 <CodeIcon className="h-4 w-4" />
               </span>
-              <span className="text-lg font-semibold text-zinc-900 dark:text-white lg:hidden">CodeSphere</span>
+              <span className="text-lg font-semibold text-slate-900 dark:text-white lg:hidden">CodeSphere</span>
             </div>
             <ThemeToggle showLabels={false} />
           </div>
 
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-white">Welcome back</h1>
-          <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Welcome back</h1>
+          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
             Use the credentials provided by your coding club admin.
           </p>
 

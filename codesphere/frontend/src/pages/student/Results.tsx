@@ -85,7 +85,7 @@ export default function Results() {
             <Tbody>
               {results.map((r) => (
                 <Tr key={r.roundId}>
-                  <Td className="font-medium text-zinc-900 dark:text-white">{r.roundTitle}</Td>
+                  <Td className="font-medium text-slate-900 dark:text-white">{r.roundTitle}</Td>
                   <Td>
                     <SessionStatusBadge status={r.status} />
                   </Td>
@@ -95,7 +95,7 @@ export default function Results() {
                         {r.score} / {r.totalMarks}
                       </span>
                     ) : (
-                      <span className="text-zinc-400 dark:text-zinc-500">Pending</span>
+                      <span className="text-slate-400 dark:text-slate-500">Pending</span>
                     )}
                   </Td>
                   <Td>
@@ -104,7 +104,7 @@ export default function Results() {
                         {r.rank} / {r.totalParticipants}
                       </span>
                     ) : (
-                      <span className="text-zinc-400 dark:text-zinc-500">—</span>
+                      <span className="text-slate-400 dark:text-slate-500">—</span>
                     )}
                   </Td>
                   <Td>{formatDateTime(r.completedAt)}</Td>
@@ -129,14 +129,14 @@ export default function Results() {
         {detailError && <InlineError message={detailError} />}
         {!detailError && detail === null && <SkeletonText lines={3} />}
         {!detailError && detail !== null && !detail.resultsAvailable && (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Results for this round aren't available yet — check back once the round has ended.
           </p>
         )}
         {!detailError && detail !== null && detail.resultsAvailable && (
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-semibold text-zinc-900 dark:text-white">
+              <span className="font-semibold text-slate-900 dark:text-white">
                 {detail.score} / {detail.totalMarks} marks
               </span>
               {detail.rank && (
@@ -145,16 +145,16 @@ export default function Results() {
                 </Badge>
               )}
             </div>
-            <div className="max-h-72 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+            <div className="max-h-72 overflow-y-auto rounded-md border border-slate-200 dark:border-slate-800">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                <thead className="border-b border-slate-200 text-slate-500 dark:border-slate-800 dark:text-slate-400">
                   <tr>
                     <th className="px-2 py-1.5 font-medium">Question</th>
                     <th className="px-2 py-1.5 font-medium">Verdict</th>
                     <th className="px-2 py-1.5 font-medium">Score</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {detail.questions?.map((q) => (
                     <tr key={q.problemId}>
                       <td className="px-2 py-1.5">
@@ -164,7 +164,7 @@ export default function Results() {
                         </div>
                       </td>
                       <td className="px-2 py-1.5">
-                        {q.verdict ? <VerdictBadge verdict={q.verdict} /> : <span className="text-zinc-400 dark:text-zinc-500">Not attempted</span>}
+                        {q.verdict ? <VerdictBadge verdict={q.verdict} /> : <span className="text-slate-400 dark:text-slate-500">Not attempted</span>}
                       </td>
                       <td className="px-2 py-1.5">
                         {q.score} / {q.marks}

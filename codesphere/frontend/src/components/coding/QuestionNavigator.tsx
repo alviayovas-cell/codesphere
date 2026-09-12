@@ -11,9 +11,9 @@ interface QuestionNavigatorProps {
 
 const stateClass: Record<QuestionState, string> = {
   current: 'border-primary-600 bg-primary-600 text-white',
-  submitted: 'border-green-500 bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
+  submitted: 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
   attempted: 'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
-  not_attempted: 'border-zinc-300 bg-white text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300',
+  not_attempted: 'border-slate-300 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
 }
 
 export default function QuestionNavigator({ count, current, states, onSelect }: QuestionNavigatorProps) {

@@ -33,23 +33,23 @@ export default function SubmissionTrendChart({ points }: SubmissionTrendChartPro
 
   return (
     <div>
-      <div className="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400">
+      <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-sm bg-primary-500 dark:bg-primary-400" /> Accepted
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-zinc-300 dark:bg-zinc-600" /> Other
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-slate-300 dark:bg-slate-600" /> Other
         </span>
       </div>
 
       <div className="relative mt-2">
         {hoveredPoint && (
           <div
-            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs shadow-md dark:border-zinc-700 dark:bg-zinc-800"
+            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-md dark:border-slate-700 dark:bg-slate-800"
             style={{ left: `${((hovered! + 0.5) / points.length) * 100}%`, top: `${(PLOT_TOP / 170) * 100}%` }}
           >
-            <p className="font-medium text-zinc-900 dark:text-white">{formatFullDate(hoveredPoint.date)}</p>
-            <p className="mt-0.5 text-zinc-600 dark:text-zinc-300">
+            <p className="font-medium text-slate-900 dark:text-white">{formatFullDate(hoveredPoint.date)}</p>
+            <p className="mt-0.5 text-slate-600 dark:text-slate-300">
               <span className="font-semibold">{hoveredPoint.accepted}</span> accepted ·{' '}
               <span className="font-semibold">{hoveredPoint.other}</span> other
             </p>
@@ -62,8 +62,8 @@ export default function SubmissionTrendChart({ points }: SubmissionTrendChartPro
             const y = PLOT_BOTTOM - frac * PLOT_HEIGHT
             return (
               <g key={frac}>
-                <line x1={0} x2={560} y1={y} y2={y} className="stroke-zinc-100 dark:stroke-zinc-800" strokeWidth={1} />
-                <text x={0} y={y - 3} className="fill-zinc-400 text-[8px] dark:fill-zinc-500">
+                <line x1={0} x2={560} y1={y} y2={y} className="stroke-slate-100 dark:stroke-slate-800" strokeWidth={1} />
+                <text x={0} y={y - 3} className="fill-slate-400 text-[8px] dark:fill-slate-500">
                   {Math.round(frac * scaleMax)}
                 </text>
               </g>
@@ -108,7 +108,7 @@ export default function SubmissionTrendChart({ points }: SubmissionTrendChartPro
                     width={barWidth}
                     height={otherHeight}
                     rx={3}
-                    className="fill-zinc-300 dark:fill-zinc-600"
+                    className="fill-slate-300 dark:fill-slate-600"
                     opacity={hovered === null || hovered === i ? 1 : 0.4}
                   />
                 )}
@@ -118,7 +118,7 @@ export default function SubmissionTrendChart({ points }: SubmissionTrendChartPro
                     x={i * slotWidth + slotWidth / 2}
                     y={PLOT_BOTTOM + 14}
                     textAnchor="middle"
-                    className="fill-zinc-400 text-[8px] dark:fill-zinc-500"
+                    className="fill-slate-400 text-[8px] dark:fill-slate-500"
                   >
                     {formatShortDate(point.date)}
                   </text>
@@ -130,19 +130,19 @@ export default function SubmissionTrendChart({ points }: SubmissionTrendChartPro
       </div>
 
       <details className="mt-2">
-        <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
+        <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
           View as table
         </summary>
-        <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+        <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-slate-200 dark:border-slate-800">
           <table className="w-full text-left text-xs">
-            <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+            <thead className="border-b border-slate-200 text-slate-500 dark:border-slate-800 dark:text-slate-400">
               <tr>
                 <th className="px-2 py-1.5 font-medium">Date</th>
                 <th className="px-2 py-1.5 font-medium">Accepted</th>
                 <th className="px-2 py-1.5 font-medium">Other</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {points.map((point) => (
                 <tr key={point.date}>
                   <td className="px-2 py-1.5">{formatFullDate(point.date)}</td>
