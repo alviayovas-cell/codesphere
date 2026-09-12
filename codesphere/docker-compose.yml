@@ -73,7 +73,13 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api}
+        # Relative path, not an absolute host/IP: nginx (see frontend/nginx.conf)
+        # proxies /api same-origin to the backend service. This means the
+        # built image works from any LAN IP/hostname unchanged - no rebuild
+        # if the host machine's address is different at the next event.
+        # Override with an absolute URL only if frontend and backend are
+        # deployed to genuinely different origins (e.g. separate hosts).
+        VITE_API_URL: ${VITE_API_URL:-/api}
     restart: unless-stopped
     ports:
       - "80:80"
