@@ -19,7 +19,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(fu
   const fieldId = id ?? autoId
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       {label && (
         <label htmlFor={fieldId} className="text-xs font-medium text-slate-700 dark:text-slate-300">
           {label}
@@ -34,7 +34,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(fu
           className={cn(
             controlClass,
             'h-9 pr-10',
-            error && 'border-red-400 focus:border-red-500 focus:ring-red-500',
+            error && 'border-red-400 focus:border-red-500 focus:ring-red-500/25',
             className,
           )}
           aria-invalid={!!error}

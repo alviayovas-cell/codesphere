@@ -65,9 +65,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # Scale this to add grading throughput, e.g.: docker compose up --scale worker=3
+    # Scale this to add grading throughput, e.g.: docker compose up --scale worker=6
+    # 4 replicas here is sized for a ~30-student contest (see
+    # judge0-selfhosted/judge0.conf's COUNT comment for the paired Judge0-side
+    # math) - each replica processes one submission at a time but fans out to
+    # up to 8 concurrent Judge0 calls for that submission's test cases
+    # (backend/app/workers/jobs.py), so this is the main lever for how many
+    # students' Submit/Run get graded in parallel during a simultaneous burst
+    # (e.g. everyone auto-submitting at round end).
     deploy:
-      replicas: 2
+      replicas: 4
 
   frontend:
     build:
